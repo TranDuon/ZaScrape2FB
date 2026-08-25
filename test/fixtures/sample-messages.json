@@ -1,0 +1,38 @@
+[
+  {
+    "name": "Tin đăng đầy đủ (mẫu thật từ nhóm Zalo)",
+    "expect_is_listing": true,
+    "expect_status": "ready",
+    "text": "🏠 CHDV FULL NỘI THẤT - THANG MÁY - NGÕ Ô TÔ\n📍 Địa chỉ: 82 Chùa Láng, Đống Đa, Hà Nội\n💰 Giá: 6tr5/tháng\n📐 Diện tích: 30m2, khép kín, có ban công\n\n❣️Nội thất : Full nội thất như hình, điều hòa, máy giặt chung\n\n❣️Dịch vụ : Điện 4000 | Nước 35k/khối | Wifi 120k/Tháng, Dịch vụ chung( Thang máy, Điện nước chung, Phí môi trường, Dọn vệ sinh...): 250/Người/Tháng.\n\n🔴 Lưu ý:\n- Thanh toán 1 cọc 1\n- CHO NUÔI PET, KHÔNG NHẬN XE ĐIỆN\n- Tối đa 3ng/2xe  ( KHÔNG NHẬN NƯỚC NGOÀI )\n- Khách qua gọi trước 30p\n\n☎️ Liên hệ xem phòng: Thu Hằng 0987654321"
+  },
+  {
+    "name": "Tin đăng thiếu giá",
+    "expect_is_listing": true,
+    "expect_status": "needs_review",
+    "text": "Còn 1 phòng 20m2 ở Cầu Giấy, khép kín, có gác lửng. Ai quan tâm inbox em nhé. LH 0912345678"
+  },
+  {
+    "name": "Banner chính sách hoa hồng (không phải tin đăng)",
+    "expect_is_listing": false,
+    "expect_status": "ignored",
+    "text": "❤️ Chính sách thưởng T8 ❤️\n\" áp dụng cho toàn bộ sale đang hợp tác với bên em:\n- Chốt 5 phòng: thưởng thêm 500k\n- Chốt 10 phòng: thưởng thêm 1tr2\nLiên hệ quản lý để nhận thưởng nhé cả nhà!"
+  },
+  {
+    "name": "Người đi thuê hỏi phòng (không phải tin đăng)",
+    "expect_is_listing": false,
+    "expect_status": "ignored",
+    "text": "Cho em hỏi khu vực Thanh Xuân còn phòng nào tầm 3tr không ạ? Em cần vào ở luôn cuối tháng này."
+  },
+  {
+    "name": "Trò chuyện xã giao (không phải tin đăng)",
+    "expect_is_listing": false,
+    "expect_status": "ignored",
+    "text": "Vâng em cảm ơn anh nhiều ạ, để em qua xem rồi báo lại anh sau nhé"
+  },
+  {
+    "name": "Viết tắt tiền tệ khó (kiểm tra quy đổi)",
+    "expect_is_listing": true,
+    "expect_status": "ready",
+    "text": "Phòng mới 100% - 3tr2/th - 22m2 - Ngõ 175 Xuân Thủy, Cầu Giấy\nCọc 1 tháng. Điện 3k5/số, nước 100k/người\nEm Nam 0977111222"
+  }
+]

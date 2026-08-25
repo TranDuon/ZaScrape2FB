@@ -1,0 +1,64 @@
+# systemd unit cho Sale Room Agent.
+#
+# Cài đặt trên VPS:
+#   sudo cp deploy/sale-room-agent.service /etc/systemd/system/
+#   sudo nano /etc/systemd/system/sale-room-agent.service   # sửa User/WorkingDirectory cho đúng
+#   sudo systemctl daemon-reload
+#   sudo systemctl enable --now sale-room-agent
+#
+# Theo dõi:
+#   systemctl status sale-room-agent
+#   journalctl -u sale-room-agent -f
+#
+# Log chi tiết vẫn nằm trong logs/app.<ngày>.<n>.log (pino-roll tự xoay vòng),
+# journalctl chỉ để xem nhanh và bắt lỗi lúc khởi động.
+
+[Unit]
+Description=Sale Room Agent (Zalo -> MongoDB -> Facebook)
+Documentation=file:///opt/sale-room-agent/RUNBOOK.md
+# Cần mạng thật sự sẵn sàng: khởi động trước khi có mạng thì kết nối Atlas và
+# đăng nhập Zalo đều hỏng ngay ở giây đầu tiên.
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+
+# SỬA hai dòng này cho khớp VPS của bạn.
+User=deploy
+WorkingDirectory=/opt/sale-room-agent
+
+# BẮT BUỘC: mọi mốc ngày/giờ nghiệp vụ tính theo giờ VN. Thiếu dòng này thì trên VPS chạy UTC,
+# bộ đếm bài mỗi ngày sẽ reset lúc 7h sáng giờ VN và khung giờ đăng lệch 7 tiếng.
+Environment=TZ=Asia/Ho_Chi_Minh
+Environment=NODE_ENV=production
+
+# Đọc secret qua EnvironmentFile thay vì .env: biến không hiện ra trong `ps aux`
+# và user khác trên cùng máy không đọc được. Nhớ: chmod 600 file này.
+EnvironmentFile=/opt/sale-room-agent/.env
+
+ExecStart=/usr/bin/npx tsx src/index.ts
+
+# Luôn khởi động lại, kể cả khi thoát mã 0: agent không có trạng thái "chạy xong",
+# thoát ra là bất thường. RestartSec giãn ra để không quay vòng liên tục khi Atlas đang lỗi.
+Restart=always
+RestartSec=10
+
+# Chờ shutdown handler chạy xong (đóng Playwright đúng cách để hồ sơ trình duyệt không hỏng —
+# hồ sơ hỏng = phải đăng nhập Facebook lại bằng tay). Nhỉnh hơn timeout 30s trong shutdown.ts.
+KillSignal=SIGTERM
+TimeoutStopSec=45
+
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=sale-room-agent
+
+# Siết quyền ở mức tối thiểu hợp lý: chỉ được ghi vào chính thư mục dự án.
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=full
+ProtectHome=read-only
+ReadWritePaths=/opt/sale-room-agent
+
+[Install]
+WantedBy=multi-user.target
