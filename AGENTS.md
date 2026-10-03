@@ -1,6 +1,6 @@
-# CLAUDE.md
+# AGENTS.md
 
-This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+This file provides guidance to Codex (Codex.ai/code) when working with code in this repository.
 
 ## Project
 
@@ -22,10 +22,6 @@ npm install
 cp .env.example .env          # fill in MONGODB_URI (Atlas, mongodb+srv://) and GEMINI_API_KEY
 
 npm run dev                   # tsx watch — main entrypoint, requires a saved Zalo session
-npm run dashboard             # management UI at 127.0.0.1:3200; runs + supervises the agent as a child
-npm run dashboard:stop        # graceful: dashboard stops the agent, then exits
-npm run autostart:install     # Windows: Startup-folder shortcut → hidden dashboard at every logon
-npm run autostart:remove
 npm run typecheck             # tsc --noEmit, no separate build step (tsx runs TS directly)
 
 npm run login:zalo            # one-time interactive QR login, writes data/zalo-session/
@@ -41,8 +37,8 @@ npm run cleanup:images        # delete images/screenshots past retention (see IM
 npm run cleanup:images -- --force   # ignore retention age, delete everything eligible by status now
 npm run backup:sessions       # snapshot Zalo session + FB browser profile into SESSION_BACKUP_DIR
 
-npm test                      # vitest, 13 files: messageBatcher/messageParser, confidenceGate,
-                               # numberParser, scheduleLogic, time, activeWindows, llmBatch (index mapping),
+npm test                      # vitest, 12 files: messageBatcher/messageParser, confidenceGate,
+                               # numberParser, scheduleLogic, time, llmBatch (index mapping),
                                # batchCollector, areaMatcher, composeBudget, composedText,
                                # pendingApproval — no API
 npm run test:watch            # vitest in watch mode
@@ -319,20 +315,12 @@ nghiệp"* and prescribed an all-caps headline, a numbered `TIÊU ĐỀ / THÔNG
 template and 4–6 trailing hashtags — a shape group spam filters match on directly. v2 casts it as a
 person subletting their own room, writing under 150 words in first person (`mình`).
 
-**`v3` on 2026-09-15** (user's request) went further: **no prices at all** on the post, and a
-plainer, shorter voice — under 70 words, 3–5 short lines, at most 2 emoji, pick only the points worth
-saying rather than listing everything. The no-price rule is enforced in **two** places, on purpose:
-the prompt forbids any money figure (and vague substitutes like "giá hợp lý"), and
-`describeListing()` no longer sends `price_vnd`, `deposit_vnd`, `deposit_terms` or any
-`utilities.*` field to the model at all — a model that never sees a number cannot leak it. Prices
-still live in `parsed_data` (Telegram `/status`, review). The only remaining leak path is free text
-(`notes`, `other_rules`) that happens to contain a price, which the prompt tells the model to drop.
-
-Four rules carried over from v2 are load-bearing and shouldn't be softened back:
+Four rules in it are load-bearing and shouldn't be softened back:
 
 - **A banned-phrase list**, because these are what the filters key on: `giá rẻ`, `hotline`,
-  `cam kết`, `inbox ngay`, `liên hệ zalo`, `siêu phẩm`, `chính chủ 100%`, and **`cọc`**. (In v2 the
-  deposit was still stated as `đặt trước 1 tháng`; v3 drops money entirely.)
+  `cam kết`, `inbox ngay`, `liên hệ zalo`, `siêu phẩm`, `chính chủ 100%`, and **`cọc`**. Banning
+  `cọc` does *not* mean dropping the deposit — the model is told to say it plainly instead
+  (`đặt trước 1 tháng`), so `deposit_vnd`/`deposit_terms` still reach the reader.
 - **No line in ALL CAPS, including district names.** This doubles as a fix for the mention-typeahead
   incident (see "Facebook automation"): `HOÀNG MAI` is exactly the kind of token Facebook offered to
   turn into a tag of a stranger.
@@ -490,7 +478,7 @@ tick moves almost nothing:
 |---|---|---|---|---|---|
 | tick 15, stagger 15–45 (old) | 14 min | 30 min | 4.5 h | 5 | 4 |
 | tick 15, stagger 45–105 | 44 min | 75 min | 10.8 h | 2 | 4 |
-| tick 20, stagger 45–105 (10/day, until 2026-09-15) | 39 min | 75 min | 10.7 h | 2 | 3 |
+| tick 20, stagger 45–105 (now) | 39 min | 75 min | 10.7 h | 2 | 3 |
 | tick 60, stagger 45–105 | 59 min | 75 min | 10.2 h | 2 | **1** |
 
 `COMPOSE_STAGGER_MIN_MINUTES` must stay at or above the tick interval. It only sets `scheduled_at`,
@@ -522,93 +510,8 @@ automatically better at either cap: simulated at 5 posts/day, a 100–200 range 
 5 and 120–240 only 3.8, because the last posts fall past the 22h window edge and defer to the next
 day.
 
-**At 15 posts/day (since 2026-09-15) the stagger is 35–65.** Raising the cap to 15 while leaving
-45–105 in place delivers only **10.3** posts/day in simulation — the raise would silently do almost
-nothing. Simulated at tick 20, 4,000 days:
-
-| stagger @ 15/day | delivered | mean gap | span | max posts/hour |
-|---|---|---|---|---|
-| 45–105 (unchanged) | 10.3 | 75 min | 11.6 h | 2 |
-| 30–80 | 14.1 | 55 min | 11.9 h | 3 |
-| **35–65 (now)** | **14.9** | 50 min | 11.6 h | 3 |
-| 30–60 | 15.0 | 45 min | 10.5 h | 3 |
-| 20–60 | 15.0 | 40 min | 9.3 h | 4 |
-
-35–65 was picked over 30–60 for the wider spread across the day at the same hourly peak.
-
-**Since 2026-09-17: 20 posts/day inside several "golden hour" windows, not one 8h–22h band.**
-`ACTIVE_WINDOWS` (`07:00-08:30,11:00-13:00,18:00-22:30` VN time; **widened by 15 min at each edge to
-`06:45-08:45,10:45-13:15,17:45-22:45` on 2026-09-29**, ~9.5 window-hours ≈ 28 tick slots) replaces
-`ACTIVE_HOURS_START/END` when set; those two remain only as the fallback when it is empty.
-`src/utils/activeWindows.ts` owns all window math. Three things changed with it:
-
-- **`staggeredSchedule` counts only in-window minutes** (`addActiveMinutes`). Adding wall-clock
-  minutes would park every job composed at 13h in the afternoon gap, then release them all as
-  overdue the moment 18h opens — pacing would silently collapse to the tick alone.
-- **"Next window" can be later today.** Outside-hours retries go to `nextWindowStart` (lunch break →
-  18h the same day), but daily-cap and per-group-cap retries go to *tomorrow's* first window —
-  otherwise a capped job would be retried at 18h against a cap that is still full.
-- **At this volume the tick, not the stagger, is the binding constraint.** 8 window-hours × 3
-  posts/hour (tick 20) ≈ 24 slots for 20 posts. Simulated over 1,500 days with listings arriving
-  7h–21h, every stagger from 20–35 to 35–65 delivered 20.0/day, min gap 15, max 3/hour; 25–40 was
-  kept (≈ 8h / 20). Posts land roughly 5 morning / 5 lunch / 10 evening, and the evening window is
-  usually full before 21h30. **Shrinking the windows below ~7 hours total makes 20/day
-  undeliverable at tick 20** — re-derive before trimming them, and note the morning window runs at
-  the 3/hour ceiling (backlog from overnight arrivals), the densest posting of the day.
-
 At a 20-minute tick the 8h–22h window holds 42 slots against a 10/day cap, so the pacing costs no
 posting capacity.
-
-**The per-group interval lives in MongoDB, not `.env`.** `checkPostingAllowed` reads
-`group.post_frequency.min_interval_minutes` from each group document; `GROUP_MIN_INTERVAL_MINUTES`
-is only the default `seed:groups add` writes for *new* groups (it was hard-coded 180 there until
-2026-09-29, so the env var did literally nothing). Changing the rule for existing groups means an
-`updateMany` on `groups` — all 26 went 180 → 120 on 2026-09-29, at the user's request, because the
-180-minute rule was what kept bouncing carry-over posts across days.
-
-**Carry-over posts go first and have their own small quota (since 2026-09-29).** A *carry-over* is a
-`post_to_group` job whose `created_at` is before today's VN midnight — composed on an earlier day
-but not yet published. They were never dropped from the queue, but traced on real data they were
-counting against the *new* day's cap and competing with fresh posts: of the 10 jobs overdue on
-09-25, several bounced on `GROUP_MIN_INTERVAL_MINUTES` for 2–3 days before going out, and with
-`LISTING_MAX_AGE_DAYS=2` that is one bounce away from being expired after Gemini already paid to
-compose them. Now:
-
-- `runCycle` tries `runPostingOnce(notify, "carryover")` **first** and only then `"today"` — still
-  at most one job per tick; the second call only runs when the first claimed nothing.
-- The first `CARRYOVER_EXTRA_POSTS_PER_DAY` (default 5) carry-overs each day are **not** counted
-  against `MAX_POSTS_PER_DAY`; beyond that they fall back to regular slots but keep priority, so
-  nothing starves. A fresh post never uses a carry-over slot. The rule lives in the pure
-  `facebook/dailyQuota.ts` (`slotFor`) so it is unit-tested without Mongo; counters are read only
-  through `dailyQuotaUsed()`, which goes through `postsTodayCount()` for the day rollover.
-- Classification is by `created_at`, not `scheduled_at`, on purpose: compose budget is counted per
-  compose day, so "the day's cap is for the posts composed that day" makes the two budgets agree.
-- **The extra quota must stay capped.** Daily volume, not spacing, is what got the previous
-  account blocked; an unbounded exemption would let the day after a 3-day power-off post a
-  backlog on top of a full day. Per-group caps and `GROUP_MIN_INTERVAL_MINUTES` still apply to
-  carry-overs unchanged. In practice the tick is the real ceiling anyway: ~8 window-hours × 3
-  posts/hour ≈ 24 slots/day, so 20 + 5 is slot-bound, not quota-bound.
-- Zalo ingestion is deliberately **not** paused while carry-overs drain. The listener only sees
-  live messages, so pausing intake would lose rooms outright; ordering at the posting step gives
-  the same "old first" result without dropping anything.
-- `test/unit/scheduleLogic.test.ts` locks the ordering (verified by swapping the two scopes: four
-  tests fail), `test/unit/dailyQuota.test.ts` the slot rules. `check:stuck` no longer accepts "at
-  today's cap" as an excuse while carry-overs are overdue and carry-over slots remain.
-
-**A deferred job no longer burns the tick (since 2026-09-30).** `runPostingOnce` used to claim one
-job and stop, so when that job hit `checkPostingAllowed`'s per-group interval it was rescheduled and
-the whole 20-minute slot went unused — on the evening of 09-29, 2 of 15 slots were lost that way while
-overdue posts for *other* groups sat postable in the queue. `processJob` now returns `attempted`
-(touched Facebook: opened the page, checked the session, posted — success *or* failure) or
-`deferred` (stopped before any browser work), and `runPostingOnce` keeps claiming the next due job
-until one is `attempted`, capped at `MAX_JOBS_CHECKED_PER_TICK` (6). The one-post-per-tick
-invariant is intact: a deferred job never reaches Playwright, and a *failed* attempt still ends the
-tick — retrying a different post right after a failure is exactly the burst the tick exists to
-prevent. Overdue jobs of the current day need no separate priority tier: the queue already claims by
-oldest `scheduled_at`, so they come right after carry-overs and ahead of anything not yet due, and
-they count against `MAX_POSTS_PER_DAY` like any other same-day post. `runCycle` reports
-all-deferred as `skipped` (INFO), not `idle`. `test/unit/postingOnce.test.ts` locks the loop
-(verified by restoring the old stop-after-one behaviour: two tests fail).
 
 **The daily counter must only ever be read through `postsTodayCount()` — reading
 `app_state.daily_counters.total_posts_today` directly deadlocks the scheduler permanently.**
@@ -721,16 +624,15 @@ metered per group and an unused slot is **not** picked up by another group: the 
 most of its good rooms while the quiet one never spends its allocation. Measured over the logs, the
 three watched threads produced 35 / 11 / 8 listings — a 4× spread.
 
-**Current setup (2026-09-17): all three threads are watched again — Diamond Homes 3 at 10,
-Dat Tphomes and Pham Dinh Dat at 5 each, 20 listings/day** (Diamond Homes 3 alone at 10 from
-2026-08-27 and 15 from 2026-09-15). Turning a thread off belongs in `ZALO_ALLOWED_THREAD_IDS`, not in an
+**Current setup (2026-08-27): only Diamond Homes 3 is watched, at 10 listings/day.** The other two
+threads are temporarily off. Turning a thread off belongs in `ZALO_ALLOWED_THREAD_IDS`, not in an
 override of `:0` — the allowlist drops the message in `isAllowed` before batching or parsing costs
 anything, whereas a `:0` cap still builds the batch and then logs one INFO line per discarded batch.
-All thread IDs are named in a `.env` comment so toggling one is a single edit.
+Their thread IDs stay in a `.env` comment so re-enabling is one edit.
 
-**`MAX_LISTINGS_PER_THREAD_PER_DAY` stays strictly below the smallest real cap (3 against 5).** It is the
+**`MAX_LISTINGS_PER_THREAD_PER_DAY` stays strictly below the real cap (5 against 10).** It is the
 fallback for any thread *not* named in the overrides, so a thread re-enabled without also being
-given an override lands on 3 — one newly enabled thread can never quietly eat the whole
+given an override lands on 5, not 10 — one thread switched back on can never quietly eat the whole
 day's budget by itself. **Re-derive it whenever `MAX_POSTS_PER_DAY` moves**: at a cap of 5 this
 fallback had to drop to 2, because a fallback left at 5 would have equalled the entire day's budget
 and silently voided the safeguard.
@@ -738,26 +640,19 @@ and silently voided the safeguard.
 The chain is meant to be read as one thing — change one number and re-derive the others:
 
 ```
-Σ per-thread caps                          = listings in       (10+5+5 = 20)
-MAX_POSTS_PER_DAY / MAX_GROUPS_PER_LISTING = listings composed (20/1   = 20)
-listings composed × MAX_GROUPS_PER_LISTING = posts out         (20 × 1 = 20)
+Σ per-thread caps                          = listings in       (10    = 10)
+MAX_POSTS_PER_DAY / MAX_GROUPS_PER_LISTING = listings composed (10/1  = 10)
+listings composed × MAX_GROUPS_PER_LISTING = posts out         (10 × 1 = 10)
 ```
 
 Intake and posting capacity now balance exactly. Roughly 24% of intake still ends as
-`ignored`/`needs_review`, so posts out lands nearer 11–12 than 15 — raising a per-thread cap, not
+`ignored`/`needs_review`, so posts out lands nearer 8 than 10 — raising a per-thread cap, not
 `MAX_POSTS_PER_DAY`, is what actually fills the posting quota.
-
-**40 active groups since 2026-09-29** (26 hand-added + 14 picked from the ~72 groups the posting
-account had already joined, chosen by listings-per-group gap: Cầu Giấy 9.7 → 2.6, Thanh Trì 0 → 2,
-Hà Đông 6 → 1; two Triều Khúc/Tân Triều groups carry a hand-declared `Thanh Trì` area so rooms there
-stop failing closed). Only add groups the account is already a member of — posting into a
-non-member group fails, and auto-joining many groups is itself a spam signal.
 
 Group capacity is not the binding constraint and was checked before raising the number: 28 active
 groups × 5 posts/day configured = 140/day, and the tightest district the watched thread produces
-(Cầu Giấy, 3 groups) still allows 15/day against the 3 listings it actually sends there (checked
-at the 10/day cap; at 15/day that share grows to ~4–5, still inside 15). The active
-window (8h–22h) with a 180-minute per-group interval capped any single group at 5 posts/day, which is
+(Cầu Giấy, 3 groups) still allows 15/day against the 3 listings it actually sends there. The active
+window (8h–22h) with `GROUP_MIN_INTERVAL_MINUTES=180` caps any single group at 5 posts/day, which is
 what makes the per-district figure worth re-deriving whenever groups are added or removed.
 
 `src/index.ts` prints the **resolved** cap for every watched thread at startup. That line exists
@@ -796,7 +691,7 @@ safely make. Three settings are derived from one another and must be reasoned ab
 
 ```
 MAX_POSTS_PER_DAY / MAX_GROUPS_PER_LISTING = listings composed per day
-        20        /          1             =       20
+        10        /          1             =       10
 ```
 
 **Keep `MAX_GROUPS_PER_LISTING <= POST_VARIATION_COUNT`.** `assignVariations` hands out variations
@@ -1094,51 +989,6 @@ Both `post_jobs` (via `finished_at`) and `post_history` (via `posted_at`) have T
 `daily_metrics` has no TTL and is incremented directly (`incrementDailyMetric` in
 `src/db/indexes.ts`) at the moment each event happens, specifically because it needs to survive
 after the detailed records it's derived from are deleted.
-
-### Dashboard + Windows autostart: a supervisor process, not a page inside the agent
-
-`src/dashboard/` is a **separate process** that serves the management UI and runs the agent
-(`src/index.ts`) as a forked child (`agentProcess.ts`), restarting it with exponential backoff
-(5s → 5min, reset after 10 min of stable running). It is separate on purpose: the moments you need
-the dashboard most — agent crashing at boot because Wi-Fi isn't up yet, a bad `.env` — are exactly
-when an in-agent page would be gone. It reads MongoDB directly (reconnecting forever), reuses
-`reviewFlow.ts`'s exported `approve`/`reject`/`retry`/`pause`/`resume` rather than a second copy,
-and only asks the agent's `/health` for what lives in agent memory (Telegram polling state).
-Autostart is a Startup-folder shortcut → `scripts/autostart/launch-hidden.vbs` → hidden
-`node --import tsx src/dashboard/main.ts`: no admin rights, and it runs inside the user's session,
-which Playwright needs when `FB_HEADLESS=false` (a Windows Service runs in session 0, no desktop).
-
-Invariants that are easy to break:
-
-- **The agent's health port is a single-instance lock.** `startHealthServer()` now rejects on
-  `EADDRINUSE` and runs *first* in `main()`, before Mongo, Telegram, the stale-job sweep or Zalo. With
-  the agent running in the background, typing `npm run dev` out of habit would otherwise open a second
-  Zalo session — zca-js allows one, so they kick each other and trip the Zalo breaker. The
-  supervisor probes that port before forking and reports `external` instead of crash-looping.
-- **Stopping goes over IPC, never `child.kill()`.** On Windows `kill()` is `TerminateProcess`: no
-  shutdown handler runs, Playwright is cut mid-action, the Chrome profile can corrupt. `shutdown.ts`
-  listens for an IPC `"shutdown"` message when `process.send` exists; `kill` is only the fallback
-  after 45s.
-- **On Windows, killing the dashboard hard-kills the agent too** (measured): libuv puts children in
-  a `KILL_ON_JOB_CLOSE` job object. Good — no orphan agent can ever duplicate the Zalo session — but
-  it means the dashboard must stop the agent *before* exiting. That is why `npm run dashboard:stop`
-  POSTs `/api/dashboard/quit` instead of `Stop-Process`, which is only its last resort. The
-  `disconnect` handler in `shutdown.ts` is the equivalent safety net for Linux, where children survive.
-- **The child gets the environment snapshotted *before* the dashboard loads `.env`** (`main.ts`).
-  dotenv never overrides existing variables, so passing the loaded values would make the agent ignore
-  `.env` edits — "edit `.env`, click Restart" would silently change nothing. The child also gets
-  `LOG_PRETTY=false` (the UI parses pino JSON from stdout) and the dashboard logs to
-  `LOG_DIR/dashboard/` so two long-lived processes never rotate the same pino-roll file.
-- **The child's stdout/stderr must always be drained** — a hidden process has no console, and an
-  unread pipe fills up and blocks the agent on its next log write.
-- **Don't trust `zalo_session.connected` while the agent isn't running**: only agent startup clears
-  it, so a hard-killed agent leaves it stuck at `true`. The UI shows "Agent không chạy" instead.
-- Security is localhost bind + a `Host` allowlist (DNS rebinding) + a required `x-dashboard-action`
-  header on every POST (a cross-origin page can't send it without a CORS preflight, which is never
-  answered). Everything from Zalo is untrusted text and is escaped in `ui.html`.
-- Crash notifications go straight to the Bot API, not `sendNotification`: that needs a started bot,
-  and starting one here would run a second `getUpdates` loop against the agent's (409 Conflict).
-  Only the first crash of a streak is announced.
 
 ### Deployment: pick systemd **or** pm2, never both
 

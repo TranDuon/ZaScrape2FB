@@ -9,7 +9,7 @@
  * Phiên được lưu vào FB_BROWSER_PROFILE_DIR và dùng lại cho mọi lần chạy sau.
  */
 import { env } from "../src/config/env.js";
-import { checkSession, closeBrowser, getBrowserContext, newPage } from "../src/facebook/fbBrowser.js";
+import { checkSession, closeBrowser, getBrowserContext, inspectSession, newPage } from "../src/facebook/fbBrowser.js";
 import { backupSessions } from "../src/maintenance/sessionBackup.js";
 import { logger } from "../src/utils/logger.js";
 
@@ -44,7 +44,17 @@ async function main(): Promise<void> {
     while (Date.now() < deadline) {
         await new Promise((resolve) => setTimeout(resolve, POLL_INTERVAL_MS));
 
-        const status = await checkSession(page);
+        if (page.isClosed()) {
+            console.error("\nCửa sổ trình duyệt đã bị đóng — chưa lưu được phiên nào.");
+            console.error("Chạy lại lệnh này và để nguyên cửa sổ cho tới khi vào được trang chủ.");
+            await closeBrowser();
+            process.exit(1);
+        }
+
+        // CỐ Ý dùng inspectSession chứ không phải checkSession: checkSession điều hướng lại về
+        // facebook.com, mà vòng này chạy vài giây một lần — trang sẽ tải lại ngay dưới tay người
+        // đang gõ và xoá sạch form đăng nhập lẫn ô nhập mã xác minh.
+        const status = await inspectSession(page);
         if (status.loggedIn) {
             console.log("\nĐăng nhập thành công. Phiên đã được lưu vào:", env.FB_BROWSER_PROFILE_DIR);
 

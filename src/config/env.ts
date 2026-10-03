@@ -1,5 +1,6 @@
 import "dotenv/config";
 import { z } from "zod";
+import { parseActiveWindows } from "../utils/activeWindows.js";
 
 /**
  * Chuỗi CSV dạng `khoa:so` -> Map. Phần tử sai định dạng bị bỏ qua thay vì làm chết cả tiến trình:
@@ -116,7 +117,18 @@ const envSchema = z.object({
     // đăng nhiều bài mỗi ngày là cách nhanh nhất để bị checkpoint. Chỉ nên tăng dần
     // sau vài tuần chạy êm.
     MAX_POSTS_PER_DAY: z.coerce.number().int().positive().default(3),
-    GROUP_MIN_INTERVAL_MINUTES: z.coerce.number().int().positive().default(180),
+    // Suất BÙ mỗi ngày cho "bài tồn": job đăng soạn từ ngày trước mà hôm đó chưa kịp lên (máy tắt,
+    // vấp quy tắc cách nhau giữa các lần đăng vào cùng nhóm...). Bài tồn luôn được đăng TRƯỚC bài
+    // mới, và N bài tồn đầu tiên mỗi ngày KHÔNG tính vào MAX_POSTS_PER_DAY — hạn mức ngày mới dành
+    // trọn cho bài soạn trong ngày đó. Bài tồn vượt N vẫn được ưu tiên nhưng ăn vào suất thường.
+    //
+    // CÓ trần, không để vô hạn: khối lượng đăng mỗi ngày là yếu tố chính khiến tài khoản bị chặn
+    // (tài khoản cũ bị chặn ở mức 10 bài/ngày). Agent tắt 3 ngày mà bài tồn được miễn hạn mức vô
+    // hạn thì ngày bật lại sẽ đăng dồn một khối lớn. Đặt 0 = vẫn ưu tiên bài tồn nhưng không miễn.
+    CARRYOVER_EXTRA_POSTS_PER_DAY: z.coerce.number().int().min(0).default(5),
+    // Mặc định cho nhóm MỚI (seed:groups add). Lúc chạy, luật thật đọc từ từng nhóm trong MongoDB
+    // (`post_frequency.min_interval_minutes`) — đổi số này KHÔNG đổi nhóm đã có.
+    GROUP_MIN_INTERVAL_MINUTES: z.coerce.number().int().positive().default(120),
 
     // Số nhóm tối đa MỘT tin được đăng lên. Ba lý do, lý do thứ ba là ràng buộc dễ quên nhất:
     // - Một tin khớp 10 nhóm mà đăng cả 10 thì ăn hết nửa hạn mức ngày cho đúng một phòng.
@@ -132,6 +144,20 @@ const envSchema = z.object({
     ACTIVE_HOURS_START: z.coerce.number().int().min(0).max(23).default(8),
     ACTIVE_HOURS_END: z.coerce.number().int().min(1).max(24).default(22),
     ACTIVE_HOURS_JITTER_MINUTES: z.coerce.number().int().min(0).default(30),
+    // Nhiều khung giờ đăng, dạng "07:00-09:00,11:00-13:30,18:00-22:30" (giờ VN). Có giá trị thì
+    // THAY HẲN cặp ACTIVE_HOURS_START/END; để rỗng thì dùng cặp đó như một khung duy nhất.
+    // Gõ sai là dừng khởi động luôn — xem `parseActiveWindows`.
+    ACTIVE_WINDOWS: z
+        .string()
+        .default("")
+        .transform((raw, ctx) => {
+            try {
+                return parseActiveWindows(raw);
+            } catch (error) {
+                ctx.addIssue({ code: z.ZodIssueCode.custom, message: (error as Error).message });
+                return z.NEVER;
+            }
+        }),
 
     // Khoảng nghỉ giả lập người thật giữa các thao tác trong trình duyệt.
     HUMAN_DELAY_MIN_MS: z.coerce.number().int().positive().default(600),
@@ -149,6 +175,18 @@ const envSchema = z.object({
     HEALTH_CHECK_PORT: z.coerce.number().int().positive().default(3100),
     // Chỉ nghe localhost: /health lộ toàn bộ tình trạng vận hành, không nên hở ra internet.
     HEALTH_CHECK_BIND: z.string().default("127.0.0.1"),
+
+    // Dashboard quản lý (npm run dashboard) — tiến trình RIÊNG, giữ agent chạy như tiến trình con.
+    // Cùng lý do với HEALTH_CHECK_BIND: chỉ nghe localhost. Dashboard bấm được Dừng/Chạy lại/Duyệt,
+    // và không có đăng nhập nào — hở ra mạng là ai cũng điều khiển được agent.
+    DASHBOARD_PORT: z.coerce.number().int().positive().default(3200),
+    DASHBOARD_BIND: z.string().default("127.0.0.1"),
+    // Mở dashboard là chạy agent luôn. Đây là cả mục đích của việc tự khởi động cùng Windows;
+    // đặt false khi chỉ muốn xem số liệu mà không đụng vào agent.
+    DASHBOARD_AUTOSTART_AGENT: z
+        .string()
+        .default("true")
+        .transform((value) => value === "true" || value === "1"),
 
     // Tin chưa đăng được quá số ngày này thì hết hạn: phòng trọ mất giá rất nhanh, đăng một
     // phòng của 3 ngày trước thì phần lớn đã cho thuê xong — vừa phí một suất đăng trong ngày,
@@ -199,8 +237,11 @@ if (env.COMPOSE_STAGGER_MAX_MINUTES < env.COMPOSE_STAGGER_MIN_MINUTES) {
     throw new Error("COMPOSE_STAGGER_MAX_MINUTES phải >= COMPOSE_STAGGER_MIN_MINUTES");
 }
 
-if (env.ACTIVE_HOURS_END <= env.ACTIVE_HOURS_START) {
-    throw new Error("ACTIVE_HOURS_END phải lớn hơn ACTIVE_HOURS_START");
+if (env.ACTIVE_WINDOWS.length === 0) {
+    if (env.ACTIVE_HOURS_END <= env.ACTIVE_HOURS_START) {
+        throw new Error("ACTIVE_HOURS_END phải lớn hơn ACTIVE_HOURS_START");
+    }
+    env.ACTIVE_WINDOWS.push({ startMinute: env.ACTIVE_HOURS_START * 60, endMinute: env.ACTIVE_HOURS_END * 60 });
 }
 
 if (env.HUMAN_DELAY_MAX_MS < env.HUMAN_DELAY_MIN_MS) {

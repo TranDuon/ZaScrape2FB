@@ -11,6 +11,14 @@ export function businessDateKey(date: Date = new Date()): string {
     return date.toLocaleString("sv-SE", { timeZone: BUSINESS_TIMEZONE }).slice(0, 10);
 }
 
+/**
+ * 0h của ngày nghiệp vụ (giờ VN) chứa thời điểm đã cho. VN không có giờ mùa hè nên offset +07:00
+ * cố định là đúng quanh năm.
+ */
+export function businessDayStart(date: Date = new Date()): Date {
+    return new Date(`${businessDateKey(date)}T00:00:00+07:00`);
+}
+
 /** Giờ trong ngày (0-23) theo giờ Việt Nam — dùng cho khung giờ hoạt động ở Module Scheduler. */
 export function businessHour(date: Date = new Date()): number {
     return Number(date.toLocaleString("en-US", { timeZone: BUSINESS_TIMEZONE, hour12: false, hour: "2-digit" }));

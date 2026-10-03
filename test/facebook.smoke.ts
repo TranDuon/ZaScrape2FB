@@ -15,6 +15,8 @@
 // nếu không kết quả test sẽ khác nhau tuỳ giờ chạy.
 process.env.ACTIVE_HOURS_START = "0";
 process.env.ACTIVE_HOURS_END = "24";
+// ACTIVE_WINDOWS trong .env thay hẳn cặp giờ trên, nên phải ép luôn cả nó.
+process.env.ACTIVE_WINDOWS = "00:00-24:00";
 
 export {};
 

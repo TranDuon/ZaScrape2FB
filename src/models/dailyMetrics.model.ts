@@ -8,7 +8,16 @@ export interface DailyMetricsDoc {
     _id: string;
     listings_received: number;
     listings_ignored: number;
+    /** Bài đã đăng và ĐANG HIỂN THỊ trên nhóm. */
     posts_success: number;
+    /**
+     * Bài đã gửi trót lọt nhưng nhóm bật kiểm duyệt nên còn chờ quản trị viên duyệt.
+     *
+     * Đếm tách khỏi `posts_success` vì hai thứ này khác nhau về kết quả thực tế: bài chờ duyệt
+     * chưa ai trên nhóm nhìn thấy và vẫn có thể bị từ chối. Gộp chung sẽ làm thống kê hàng ngày
+     * trông đẹp hơn thực tế. Trường thêm sau nên document cũ không có — luôn đọc qua `?? 0`.
+     */
+    posts_pending_approval?: number;
     posts_failed: number;
     extraction_time_ms_total: number;
     extraction_count: number;

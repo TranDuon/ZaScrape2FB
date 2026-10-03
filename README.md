@@ -44,6 +44,46 @@ scp user@vps:~/sale-room-agent/data/zalo-session/login-qr.png .
 
 ## Chạy
 
+### Cách thường dùng: tự khởi động cùng Windows + dashboard
+
+```bash
+npm run autostart:install   # một lần: từ nay mỗi lần đăng nhập Windows, agent tự chạy ẩn
+```
+
+Lệnh này tạo shortcut trong thư mục Startup (không cần quyền admin), tạo lối tắt
+**Sale Room Dashboard** trên Desktop, chạy luôn agent và mở dashboard tại <http://127.0.0.1:3200>.
+
+Dashboard cho xem và làm được:
+
+- trạng thái agent, Zalo, cầu dao Facebook, bot Telegram, ổ đĩa, kèm các nút **Chạy / Dừng / Khởi động lại**
+- số bài đã đăng hôm nay so với hạn mức, tin nhận, tin đã soạn, bài chờ admin nhóm duyệt
+- tin chờ duyệt với nút **Duyệt / Bỏ qua** (chung logic với `/approve` `/reject` trên Telegram)
+- lịch đăng sắp tới, bài đăng gần đây (bài lỗi có nút **Thử lại**), số liệu 7 ngày
+- nút **Tạm dừng đăng** / **cho đăng lại** (như `/pause` `/resume`)
+- log trực tiếp, lọc được theo mức
+
+Agent chết bất thường thì dashboard tự chạy lại (chờ lâu dần: 5s, 10s, 20s… tối đa 5 phút) và báo
+Telegram ở lần chết đầu tiên.
+
+```bash
+npm run dashboard           # chạy dashboard ở cửa sổ hiện tại (thấy lỗi trực tiếp), Ctrl+C để tắt
+npm run dashboard:stop      # tắt hẳn dashboard đang chạy ẩn (dừng agent êm trước)
+npm run autostart:remove    # gỡ tự khởi động
+```
+
+Lưu ý:
+
+- Agent chạy khi **đăng nhập** Windows, không phải lúc vừa bật nguồn. Muốn bật máy là chạy thì bật
+  tự đăng nhập (`netplwiz`). Máy ngủ (sleep) thì agent cũng ngừng, nên tắt chế độ ngủ tự động nếu
+  cần agent chạy cả ngày.
+- **Đừng gõ `npm run dev` khi agent nền đang chạy.** Hai agent sẽ mở hai phiên Zalo đá nhau ra, nên
+  agent thứ hai tự từ chối khởi động (khoá theo cổng health 3100). Muốn chạy tay để dev: bấm **Dừng**
+  trên dashboard trước.
+- Sửa `.env` hay code của agent → bấm **Khởi động lại** trên dashboard là đủ. Sửa code của chính
+  dashboard (`src/dashboard/`) → `npm run dashboard:stop` rồi chạy lại.
+
+### Chạy tay
+
 ```bash
 npm run dev        # chế độ phát triển, tự khởi động lại khi sửa code
 npm start          # chạy thường

@@ -4,39 +4,48 @@ import { env } from "../config/env.js";
 import type { ListingParsedData } from "../models/listing.model.js";
 
 /** Tăng khi sửa prompt để biết một bài đăng cũ được sinh bằng phiên bản nào. */
-export const COMPOSER_PROMPT_VERSION = "v1";
+export const COMPOSER_PROMPT_VERSION = "v3";
 
-export const COMPOSER_SYSTEM_INSTRUCTION = `Bạn là một môi giới phòng trọ chuyên nghiệp, viết bài đăng cho thuê phòng trên các hội nhóm Facebook tại Việt Nam.
+export const COMPOSER_SYSTEM_INSTRUCTION = `Bạn là một người bình thường đang tìm người thuê phòng, viết một bài ngắn vào hội nhóm Facebook tại Việt Nam.
 
-MỤC TIÊU:
-Viết bài ngắn gọn, trực diện, đúng trọng tâm để người thuê đọc lướt qua nắm trọn thông tin ngay và liên hệ ngay lập tức.
+GIỌNG VĂN:
+- Giản dị, đời thường, xưng "mình". Viết như nhắn tin cho người quen, không phải viết quảng cáo.
+- Ngắn gọn, đi thẳng vào ý. Không rào đón, không kể lể, không câu thừa.
+- Không khen quá lời ("cực đẹp", "siêu thoáng", "hiếm có"). Có gì nói nấy.
 
-TIÊU CHUẨN TRÌNH BÀY:
-- Độ dài: Ngắn gọn, súc tích (dưới 100-120 từ mỗi bài).
-- Icon/Emoji: Tối giản, chỉ dùng dấu gạch đầu dòng (-) hoặc dấu chấm tròn (•), hạn chế tối đa emoji màu mè rườm rà.
-- Trình bày: Rõ ràng, dễ nhìn trên màn hình điện thoại, phân dòng rành mạch.
-- Độ chính xác: Chỉ sử dụng dữ liệu được cung cấp (giá, dịch vụ, nội thất, vị trí, liên hệ...). Tuyệt đối KHÔNG tự bịa thêm thông tin ngoài dữ liệu.
-- Vị trí: Viết theo ngõ/ngách/đường/quận (KHÔNG ghi số nhà cụ thể để bảo mật).
+KHÔNG ĐƯỢC GHI GIÁ — BẮT BUỘC:
+- Tuyệt đối không ghi bất kỳ con số tiền nào: không giá thuê, không tiền đặt trước, không giá điện/nước/wifi/dịch vụ.
+- Không viết kiểu "giá mềm", "giá hợp lý", "giá tốt", "liên hệ để biết giá". Đơn giản là không nhắc tới giá.
+- Nếu trong ghi chú hay quy định có lẫn số tiền, bỏ phần đó đi.
 
-CẤU TRÚC BÀI ĐĂNG GỒM:
-1. TIÊU ĐỀ: [LOẠI PHÒNG] + [NGÕ/ĐƯỜNG] + [QUẬN] (In hoa ngắn gọn)
-2. THÔNG TIN CHÍNH:
-   • Giá thuê & Hình thức cọc (Cọc/đóng)
-   • Tình trạng phòng / Thời gian trống
-   • Loại phòng (Studio/Gác xép), Thang máy/Thang bộ
-   • Nội thất sẵn có
-3. CHI PHÍ DỊCH VỤ: Điện, nước, dịch vụ chung, wifi (ghi rõ đơn vị tính).
-4. LƯU Ý: Giới hạn xe, giờ giấc, hẹn xem phòng trước 30 phút (nếu có).
-5. LIÊN HỆ: SĐT / Zalo [Số điện thoại].
+TỪ NGỮ CẤM (khiến bài bị bộ lọc nhóm giữ lại chờ duyệt):
+- Cấm: "giá rẻ", "hotline", "cam kết", "inbox ngay", "liên hệ zalo", "siêu phẩm", "chính chủ 100%", "cọc".
+- KHÔNG chèn link website.
+- KHÔNG viết dòng nào bằng CHỮ IN HOA TOÀN BỘ, kể cả tên quận — chữ in hoa còn hay bị Facebook hiểu nhầm thành tên người để gắn thẻ.
+- Emoji: tối đa 2 icon đơn giản, không dùng cũng được.
 
-QUY ĐỊNH TẠO NHIỀU BIẾN THỂ:
-Nếu yêu cầu tạo nhiều biến thể cho một phòng để đăng nhiều nhóm, các bài phải thay đổi linh hoạt:
-- Cách giật tiêu đề
-- Thứ tự sắp xếp các dòng thông tin (đưa giá lên đầu, hoặc đưa nội thất/vị trí lên đầu)
-- Cách hành văn (vẫn giữ dữ liệu gốc không đổi)
+TRÌNH BÀY:
+- Dưới 70 từ. Khoảng 3-5 dòng ngắn.
+- Câu đầu nói thẳng đang có phòng ở đâu, KHÔNG làm dòng tiêu đề.
+- Mỗi ý một dòng, dễ đọc trên điện thoại.
 
-XỬ LÝ NHIỀU PHÒNG:
-Nếu đầu vào có nhiều phòng (phân tách bởi "=== PHÒNG #n ===" hoặc theo mã), xử lý độc lập từng phòng, tuyệt đối không lẫn lộn dữ liệu giữa các phòng.`;
+NỘI DUNG (chỉ chọn những ý đáng nói nhất, không cần đủ hết):
+- Vị trí: ngõ/đường/quận. KHÔNG ghi số nhà cụ thể.
+- Loại phòng, diện tích, nội thất chính, khi nào vào ở được.
+- Một lưu ý thật sự cần nếu có (xe, thú cưng, hẹn trước khi xem).
+
+ĐỘ CHÍNH XÁC — QUAN TRỌNG NHẤT:
+Chỉ dùng đúng dữ liệu được cung cấp. Thiếu thông tin nào thì bỏ qua, TUYỆT ĐỐI không bịa, không suy đoán, không viết "đang cập nhật".
+
+KẾT BÀI:
+Một câu mời nhắn tin ngắn, tự nhiên, ví dụ "Ai cần thì nhắn mình nhé". Mỗi biến thể kết một kiểu khác.
+Nếu có số điện thoại, đặt ở dòng riêng, viết trơn — không nhãn "HOTLINE", không trang trí.
+
+NHIỀU BIẾN THỂ:
+Khi một phòng cần nhiều bài để đăng nhiều nhóm, các bài phải khác nhau thật sự — khác câu mở đầu, khác thứ tự các ý, khác cách kết. Dữ liệu gốc giữ nguyên không đổi.
+
+NHIỀU PHÒNG:
+Đầu vào có thể gồm nhiều phòng (phân tách bởi "=== PHÒNG #n ==="). Xử lý độc lập từng phòng, tuyệt đối không lẫn dữ liệu phòng này sang phòng kia.`;
 
 const VARIATIONS_SCHEMA: Schema = {
     type: Type.ARRAY,
@@ -50,7 +59,10 @@ const VARIATIONS_SCHEMA: Schema = {
             },
             hashtags: {
                 type: Type.ARRAY,
-                description: "4-6 hashtag, mỗi phần tử bắt đầu bằng dấu #",
+                description:
+                    "TỐI ĐA 2 hashtag, và để mảng rỗng là lựa chọn tốt. Một khối 4-6 hashtag ở cuối " +
+                    "bài là dấu hiệu rao vặt rõ nhất, đi ngược hẳn giọng người thật đang nhượng phòng. " +
+                    "Mỗi phần tử bắt đầu bằng dấu #",
                 items: { type: Type.STRING },
             },
         },
@@ -111,16 +123,15 @@ export const composerSchema = z.object({
 
 export type ComposerResult = z.infer<typeof composerSchema>;
 
-function formatMoney(value: number | null): string | null {
-    if (value === null) return null;
-    return `${value.toLocaleString("vi-VN")}đ`;
-}
-
 /**
  * Gói dữ liệu đã bóc tách thành mô tả dạng chữ cho model.
  *
  * Chỉ đưa vào những field CÓ giá trị: liệt kê cả field null sẽ khiến model có xu hướng
  * viết "đang cập nhật" cho từng mục trống, làm bài đăng loãng và kém tin cậy.
+ *
+ * Từ v3 bài đăng KHÔNG hiển thị giá, nên mọi field tiền (giá thuê, cọc, điện/nước/wifi/dịch vụ,
+ * điều khoản cọc) bị loại ngay tại đây chứ không chỉ dặn trong prompt: model không thấy con số
+ * nào thì cũng không thể lỡ tay viết nó ra. Giá vẫn nằm nguyên trong `parsed_data`.
  */
 export function describeListing(data: ListingParsedData): string {
     const lines: string[] = [];
@@ -131,26 +142,18 @@ export function describeListing(data: ListingParsedData): string {
     };
 
     add("Loại hình", data.room_type);
-    add("Giá thuê mỗi tháng", formatMoney(data.price_vnd));
     add("Diện tích", data.area_m2 ? `${data.area_m2}m2` : null);
     add("Địa chỉ", data.address.raw);
     add("Phường/xã", data.address.ward);
     add("Quận/huyện", data.address.district);
     add("Tỉnh/thành phố", data.address.city);
-    add("Tiền cọc", formatMoney(data.deposit_vnd));
     add("Thời điểm vào ở được", data.available_from);
 
     add("Nội thất", data.furniture.summary);
     if (data.furniture.items.length > 0) add("Nội thất chi tiết", data.furniture.items.join(", "));
     if (data.amenities.length > 0) add("Tiện ích", data.amenities.join(", "));
 
-    add("Giá điện", data.utilities.electricity_price);
-    add("Giá nước", data.utilities.water_price);
-    add("Wifi", data.utilities.wifi_price);
-    add("Phí dịch vụ", data.utilities.service_fee);
-
     const rules = data.house_rules;
-    add("Điều khoản cọc", rules.deposit_terms);
     if (rules.pet_allowed !== null) add("Thú cưng", rules.pet_allowed ? "được nuôi" : "không được nuôi");
     add("Giới hạn người/xe", rules.vehicle_limit);
     if (rules.foreigner_allowed !== null) {

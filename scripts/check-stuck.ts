@@ -13,7 +13,9 @@ import { env } from "../src/config/env.js";
 import { closeMongo, connectMongo } from "../src/db/mongoClient.js";
 import { appState, groups, listings, postHistory, postJobs } from "../src/db/collections.js";
 import type { ListingStatus } from "../src/models/listing.model.js";
-import { formatBusinessTime } from "../src/utils/time.js";
+import { isWithinActiveHours } from "../src/facebook/rateLimiter.js";
+import { formatActiveWindows } from "../src/utils/activeWindows.js";
+import { businessDateKey, businessDayStart, formatBusinessTime } from "../src/utils/time.js";
 
 /**
  * Trạng thái mà tin đăng chỉ nên đi ngang qua, không được nằm lại.
@@ -126,13 +128,58 @@ async function checkFailedJobs(): Promise<void> {
 
 async function checkOverdueJobs(): Promise<void> {
     section("Job đến hạn nhưng chưa chạy");
-    // Job quá hạn hơn 1 giờ nghĩa là bộ điều phối không nhặt được nó — thường do cầu dao ngắt,
-    // ngoài khung giờ, hoặc đã đủ hạn mức ngày. Ba lý do đó đều bình thường, nên chỉ báo để biết.
+    // Job quá hạn hơn 1 giờ nghĩa là bộ điều phối không nhặt được nó. Có những lý do hoàn toàn
+    // bình thường (cầu dao ngắt, ngoài khung giờ, đã đủ hạn mức ngày) — nhưng KHÔNG được coi mọi
+    // job quá hạn là bình thường. Bản cũ in đúng một dòng "bình thường nếu ... đã đủ hạn mức
+    // ngày" cho mọi trường hợp, nên khi lỗi bộ đếm ngày khoá hệ thống suốt 4/9-6/9/2026 (22 job
+    // quá hạn, không bài nào lên) công cụ này vẫn báo yên ổn và thoát 0. Nay phải LOẠI TRỪ từng
+    // lý do rồi mới kết luận: hết lý do chính đáng mà job vẫn nằm im nghĩa là điều phối đã hỏng.
     const cutoff = new Date(Date.now() - 3_600_000);
     const overdue = await postJobs().countDocuments({ status: "pending", scheduled_at: { $lt: cutoff } });
 
-    if (overdue === 0) console.log("  Không có job nào quá hạn.");
-    else console.log(`  ${overdue} job đã quá hạn hơn 1 giờ (bình thường nếu ngoài khung giờ đăng hoặc đã đủ hạn mức ngày).`);
+    if (overdue === 0) {
+        console.log("  Không có job nào quá hạn.");
+        return;
+    }
+
+    const state = await appState().findOne({ _id: APP_STATE_ID });
+    const today = businessDateKey();
+    // Bộ đếm của ngày cũ nghĩa là hôm nay chưa đăng bài nào, dù con số lưu trong DB có lớn.
+    const isToday = state?.daily_counters.date === today;
+    const postsToday = isToday ? state.daily_counters.total_posts_today : 0;
+    const carryoverToday = isToday ? (state.daily_counters.carryover_posts_today ?? 0) : 0;
+
+    // Hết suất thường CHƯA đủ làm lý do: bài tồn từ ngày trước còn suất bù riêng
+    // (CARRYOVER_EXTRA_POSTS_PER_DAY). Còn suất bù mà bài tồn quá hạn vẫn nằm im là điều phối hỏng.
+    const overdueCarryover = await postJobs().countDocuments({
+        status: "pending",
+        scheduled_at: { $lt: cutoff },
+        created_at: { $lt: businessDayStart() },
+    });
+    const capReached =
+        postsToday >= env.MAX_POSTS_PER_DAY &&
+        (overdueCarryover === 0 || carryoverToday >= env.CARRYOVER_EXTRA_POSTS_PER_DAY);
+
+    const excuse = state?.circuit_breaker.tripped
+        ? `cầu dao Facebook đang ngắt (${state.circuit_breaker.reason ?? "không rõ lý do"})`
+        : !isWithinActiveHours()
+          ? `ngoài khung giờ đăng (${formatActiveWindows(env.ACTIVE_WINDOWS)} giờ VN)`
+          : capReached
+            ? `đã đủ hạn mức ${postsToday}/${env.MAX_POSTS_PER_DAY} bài hôm nay` +
+              (overdueCarryover > 0 ? ` và ${carryoverToday}/${env.CARRYOVER_EXTRA_POSTS_PER_DAY} suất bù` : "")
+            : null;
+
+    if (excuse) {
+        console.log(`  ${overdue} job quá hạn hơn 1 giờ — bình thường, vì ${excuse}.`);
+        return;
+    }
+
+    problem(
+        `${overdue} job quá hạn hơn 1 giờ mà KHÔNG có lý do chính đáng: cầu dao không ngắt, ` +
+            `đang trong khung giờ đăng, mới đăng ${postsToday}/${env.MAX_POSTS_PER_DAY} bài hôm nay ` +
+            `(+${carryoverToday}/${env.CARRYOVER_EXTRA_POSTS_PER_DAY} suất bù, ${overdueCarryover} bài tồn quá hạn). ` +
+            `Bộ điều phối không nhặt job — kiểm tra log "Nhịp điều phối bỏ qua" để biết lý do.`,
+    );
 }
 
 async function checkUnknownPosts(): Promise<void> {

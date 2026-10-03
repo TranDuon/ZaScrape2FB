@@ -13,6 +13,7 @@ import { notifyStartup, notifyZaloIssue } from "./notifier/notifyEvents.js";
 import { sendNotification, startTelegramBot, stopTelegramBot } from "./notifier/telegramBot.js";
 import { registerReviewCommands } from "./review/reviewFlow.js";
 import { startScheduler, stopScheduler } from "./scheduler/cronRunner.js";
+import { formatActiveWindows } from "./utils/activeWindows.js";
 import { logger } from "./utils/logger.js";
 import { installShutdownHandlers, isShuttingDown, onShutdown } from "./utils/shutdown.js";
 import { MessageListener } from "./zalo/messageListener.js";
@@ -31,6 +32,12 @@ const STALE_JOB_MS = 15 * 60 * 1000;
 
 async function main(): Promise<void> {
     installShutdownHandlers();
+
+    // Mở cổng health ĐẦU TIÊN: nó là khoá một tiến trình (xem startHealthServer). Phải chiếm được
+    // khoá trước mọi việc có tác dụng phụ — dọn job dở dang, bật bot Telegram, nhất là kết nối Zalo.
+    // Request tới trước khi MongoDB kết nối xong chỉ nhận về 500, không sao.
+    await startHealthServer();
+    onShutdown("health-server", stopHealthServer);
 
     await connectMongo();
     await ensureIndexes();
@@ -75,9 +82,6 @@ async function main(): Promise<void> {
     // có thể làm hỏng hồ sơ trình duyệt, mà hồ sơ hỏng thì phải đăng nhập Facebook lại bằng tay.
     onShutdown("fb-browser", closeBrowser);
 
-    startHealthServer();
-    onShutdown("health-server", stopHealthServer);
-
     // Dọn ảnh/screenshot cũ hàng ngày + cảnh báo đầy đĩa hàng giờ — không liên quan tới pipeline
     // đăng bài nên bật độc lập, không phụ thuộc circuit breaker nào.
     startMaintenanceScheduler(sendNotification);
@@ -105,7 +109,7 @@ async function main(): Promise<void> {
         "Trần thu mỗi nhóm": intakeCaps,
         "Tổng tin thu/ngày": totalIntake || "không giới hạn theo nhóm",
         "Hạn mức đăng": `${env.MAX_POSTS_PER_DAY} bài/ngày`,
-        "Khung giờ đăng": `${env.ACTIVE_HOURS_START}h-${env.ACTIVE_HOURS_END}h`,
+        "Khung giờ đăng": formatActiveWindows(env.ACTIVE_WINDOWS),
         "Trình duyệt": env.FB_HEADLESS ? "chạy ngầm" : "hiện cửa sổ",
     };
 

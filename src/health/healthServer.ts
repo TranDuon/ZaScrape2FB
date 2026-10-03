@@ -91,8 +91,13 @@ async function buildReport(): Promise<HealthReport> {
  * Mặc định chỉ nghe 127.0.0.1: báo cáo này để lộ toàn bộ tình trạng vận hành
  * (phiên còn sống không, bao nhiêu job đang chờ), không nên hở ra internet.
  * Xem từ xa qua SSH tunnel: ssh -L 3100:127.0.0.1:3100 user@vps
+ *
+ * Cổng này đồng thời là KHOÁ MỘT TIẾN TRÌNH: đã có agent khác giữ cổng thì promise bị reject và
+ * `main()` dừng ngay, trước khi kịp chạm vào Zalo. Cần có từ khi agent tự chạy nền qua dashboard —
+ * gõ `npm run dev` theo thói quen lúc agent nền đang chạy sẽ mở phiên Zalo thứ hai, mà zca-js chỉ
+ * cho một phiên: hai bên đá nhau ra và cầu dao Zalo ngắt ngay (DuplicateConnection).
  */
-export function startHealthServer(): void {
+export function startHealthServer(): Promise<void> {
     server = http.createServer((request, response) => {
         if (!request.url?.startsWith("/health")) {
             response.writeHead(404).end();
@@ -113,15 +118,36 @@ export function startHealthServer(): void {
             });
     });
 
-    server.listen(env.HEALTH_CHECK_PORT, env.HEALTH_CHECK_BIND, () => {
-        log.info(
-            { url: `http://${env.HEALTH_CHECK_BIND}:${env.HEALTH_CHECK_PORT}/health` },
-            "Endpoint kiểm tra sức khoẻ đã bật",
-        );
-    });
+    const current = server;
 
-    server.on("error", (error) => {
-        log.error({ err: error }, "Máy chủ health lỗi");
+    return new Promise<void>((resolve, reject) => {
+        const onStartupError = (error: NodeJS.ErrnoException) => {
+            server = null;
+            if (error.code === "EADDRINUSE") {
+                reject(
+                    new Error(
+                        `Cổng ${env.HEALTH_CHECK_PORT} đang bị chiếm — nhiều khả năng agent đã chạy ở tiến trình khác ` +
+                            `(dashboard tự khởi động, hoặc một cửa sổ npm run dev khác). Không chạy song song hai agent: ` +
+                            `hai phiên Zalo sẽ đá nhau ra. Dừng agent kia trước (dashboard: http://127.0.0.1:${env.DASHBOARD_PORT}).`,
+                    ),
+                );
+            } else {
+                reject(error);
+            }
+        };
+
+        current.once("error", onStartupError);
+        current.listen(env.HEALTH_CHECK_PORT, env.HEALTH_CHECK_BIND, () => {
+            current.off("error", onStartupError);
+            current.on("error", (error) => {
+                log.error({ err: error }, "Máy chủ health lỗi");
+            });
+            log.info(
+                { url: `http://${env.HEALTH_CHECK_BIND}:${env.HEALTH_CHECK_PORT}/health` },
+                "Endpoint kiểm tra sức khoẻ đã bật",
+            );
+            resolve();
+        });
     });
 }
 

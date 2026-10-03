@@ -8,6 +8,9 @@ Kiến trúc/thiết kế: [plan.md](plan.md) · Cài đặt/sử dụng: [READM
 
 ## Kiểm tra nhanh khi thấy bất thường
 
+Trên máy Windows đã chạy `npm run autostart:install`: mở <http://127.0.0.1:3200> (lối tắt
+**Sale Room Dashboard** trên Desktop). Dashboard hiện mọi thứ dưới đây kèm log trực tiếp.
+
 ```bash
 curl http://127.0.0.1:3100/health          # trên VPS, hoặc qua SSH tunnel từ máy nhà
 systemctl status sale-room-agent           # nếu deploy bằng systemd
@@ -162,12 +165,59 @@ nâng dung lượng ổ.
 
 ---
 
+## Sự cố 7b — Máy Windows: dashboard không mở được / agent không tự chạy
+
+1. Mở <http://127.0.0.1:3200>. Không vào được nghĩa là tiến trình dashboard không chạy:
+   - Xem `logs/dashboard/startup-error.log`. Lỗi hay gặp nhất là `.env` không hợp lệ. Khi đó chính
+     dashboard cũng không dựng lên được, và vì chạy ẩn nên file này là dấu vết duy nhất.
+   - Chạy `npm run dashboard` trong một cửa sổ để thấy lỗi trực tiếp.
+   - Kiểm tra shortcut còn trong thư mục Startup (`Win+R` → `shell:startup` → `Sale Room Agent`).
+     Mất thì chạy lại `npm run autostart:install`. Đổi chỗ cài Node.js cũng cần cài lại, vì
+     đường dẫn `node.exe` được ghi cứng vào shortcut.
+2. Dashboard mở được nhưng agent **"Vừa chết — chờ chạy lại"**: đọc các dòng đỏ trong Log trực tiếp.
+   Lúc vừa mở máy mà chưa có mạng thì MongoDB lỗi là bình thường; dashboard tự thử lại.
+3. Agent **"Chạy ngoài dashboard"**: có một cửa sổ `npm run dev` đang giữ agent. Tắt cửa sổ đó,
+   dashboard sẽ tự nhận quản lý trong vòng 30 giây.
+4. Tắt/giết thẳng tiến trình dashboard (Task Manager) sẽ **giết cứng agent theo**, cả Chrome của
+   Playwright (job object của Windows). Luôn tắt bằng nút **Dừng** hoặc `npm run dashboard:stop`.
+   Hồ sơ trình duyệt hỏng nghĩa là phải đăng nhập Facebook lại bằng tay.
+
+---
+
 ## Sự cố 8 — MongoDB Atlas không kết nối được
 
 1. Kiểm tra Network Access trong Atlas UI — IP của VPS còn trong danh sách cho phép không?
    (IP VPS đổi sau khi rebuild máy là nguyên nhân hay gặp.)
 2. Gói M0 có bảo trì định kỳ, downtime ngắn — driver MongoDB tự thử lại, thường tự khỏi.
 3. Kiểm tra đã dùng đúng dạng `mongodb+srv://` chưa (không phải `mongodb://`).
+
+---
+
+## Sự cố 9 — Hệ thống soạn bài, xếp lịch nhưng KHÔNG đăng gì cả
+
+Dấu hiệu: Telegram vẫn báo "Đã trích xuất từ Zalo…" đều đặn nhưng nhiều giờ/nhiều ngày không có một
+tin "✅ Đã đăng…" nào; `/status` cho thấy nhiều tin ở trạng thái `queued`; cầu dao **không** ngắt.
+
+1. `npm run check:stuck` — mục "Job đến hạn nhưng chưa chạy" nay tự loại trừ các lý do chính đáng.
+   Nếu nó báo `[!] N job quá hạn ... mà KHÔNG có lý do chính đáng` thì bộ điều phối thật sự đã hỏng.
+2. Xem log: `grep "Nhịp điều phối bỏ qua" logs/app.<ngày>.1.log | tail -20`. Mỗi nhịp bỏ qua đều
+   kèm lý do. Cùng một lý do lặp lại suốt cả ngày mà không có bài nào lên là bất thường.
+3. Kiểm tra bộ đếm ngày trong `app_state`:
+
+```bash
+npm run check:db      # in ra "ngày hiện tại (giờ VN)" của daily_counters
+```
+
+Nếu `daily_counters.date` **không phải hôm nay**, bộ đếm đã kẹt ở một ngày cũ. Từ 2026-09-06
+`runCycle` đọc qua `postsTodayCount()` nên bộ đếm tự lật ngày ở nhịp kế tiếp — chỉ cần khởi động
+lại agent và chờ một nhịp (`SCHEDULER_TICK_CRON`, mặc định 20 phút). Không cần sửa tay MongoDB.
+
+Nguyên nhân gốc đã khắc phục (xem CLAUDE.md, mục "Two pacing models coexist"): chốt chặn hạn mức
+ngày đọc số thô nên tự khoá chính nó — nó chặn luôn đoạn mã duy nhất reset được con số đang chặn nó.
+
+4. Backlog tồn lại sẽ chảy ra với tốc độ **một bài/nhịp** và tối đa `MAX_POSTS_PER_DAY` bài/ngày —
+   đó là hành vi đúng, đừng nới nhịp cron để đẩy nhanh (xem cảnh báo về tần suất đăng trong
+   CLAUDE.md). Tin quá `LISTING_MAX_AGE_DAYS` ngày sẽ tự chuyển sang `expired` và không đăng nữa.
 
 ---
 

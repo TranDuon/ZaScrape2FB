@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import { MongoServerError, ObjectId } from "mongodb";
+import { MongoServerError, ObjectId, type Filter } from "mongodb";
 import { postJobs } from "../db/collections.js";
 import { childLogger } from "../utils/logger.js";
 import type { JobDoc, JobType } from "../models/job.model.js";
@@ -107,11 +107,20 @@ const WORKER_ID = `${process.pid}@${process.env.HOSTNAME ?? "local"}`;
  */
 export type ClaimOrder = "oldest_first" | "newest_first";
 
-export async function claimNextJob(type: JobType, order: ClaimOrder = "oldest_first"): Promise<JobDoc | null> {
+/**
+ * `extraFilter` thu hẹp tập job được nhận — dùng để nhặt riêng bài tồn từ ngày trước trước khi tới
+ * bài soạn hôm nay (xem `runPostingOnce`). Vẫn là một `findOneAndUpdate` duy nhất nên không mất
+ * tính nguyên tử.
+ */
+export async function claimNextJob(
+    type: JobType,
+    order: ClaimOrder = "oldest_first",
+    extraFilter: Filter<JobDoc> = {},
+): Promise<JobDoc | null> {
     const now = new Date();
 
     const job = await postJobs().findOneAndUpdate(
-        { type, status: "pending", scheduled_at: { $lte: now } },
+        { ...extraFilter, type, status: "pending", scheduled_at: { $lte: now } },
         {
             $set: {
                 status: "processing",

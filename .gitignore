@@ -4,3 +4,7 @@ logs/
 .env
 *.log
 .DS_Store
+
+# Ban sao .env (chua secrets that) — .env o tren chi che dung mot file
+.env.*
+!.env.example

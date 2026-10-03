@@ -11,10 +11,16 @@ import type { ObjectId } from "mongodb";
  * dẫn tới hành động khác hẳn nhau — `failed` là chắc chắn chưa đăng (đăng lại được), `unknown`
  * thì phải mở Facebook nhìn tận mắt trước đã. Chuyển trạng thái cũng đồng thời là cách chống
  * báo trùng: bản ghi hết `attempting` nên vòng quét sau không tìm thấy nữa.
+ *
+ * `pending_approval` là bài đã gửi đi trót lọt nhưng nhóm bật kiểm duyệt nên còn nằm chờ quản trị
+ * viên duyệt. Tách riêng khỏi `success` vì `success` nghĩa là bài ĐANG hiển thị trên nhóm, còn bài
+ * chờ duyệt thì chưa ai nhìn thấy và có thể bị từ chối hẳn. Giống `success` ở chỗ tuyệt đối KHÔNG
+ * được đăng lại — bài đã nằm trong hàng chờ của nhóm, đăng lại chỉ tạo bài trùng trong hàng chờ đó.
  */
 export const POST_HISTORY_STATUS = [
     "attempting",
     "success",
+    "pending_approval",
     "failed",
     "checkpoint_blocked",
     "skipped",
@@ -30,6 +36,14 @@ export interface PostHistoryDoc {
     status: PostHistoryStatus;
     fb_post_url: string | null;
     error_message: string | null;
+    /**
+     * Ghi chú cho kết quả KHÔNG phải lỗi — hiện dùng cho cụm chữ đã khiến bài bị nhận là chờ duyệt.
+     *
+     * Tách khỏi `error_message` để đọc bản ghi trong MongoDB không bị hiểu nhầm: bài chờ duyệt là
+     * kết quả bình thường, không có lỗi nào cả. Trường thêm sau nên bản ghi cũ không có — luôn đọc
+     * qua `?? null`.
+     */
+    note?: string | null;
     screenshot_path: string | null;
     duration_ms: number | null;
     /** Mốc TTL: bản ghi tự xoá sau JOB_HISTORY_RETENTION_DAYS ngày. */

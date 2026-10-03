@@ -21,7 +21,14 @@ export interface AppStateDoc {
     daily_counters: {
         /** YYYY-MM-DD theo giờ VN (xem utils/time.ts). */
         date: string;
+        /** Bài tính vào MAX_POSTS_PER_DAY. */
         total_posts_today: number;
+        /**
+         * Bài tồn từ ngày trước đã đăng bằng suất bù CARRYOVER_EXTRA_POSTS_PER_DAY hôm nay — không
+         * tính vào `total_posts_today`. Trường thêm sau nên document cũ không có: luôn đọc qua
+         * `dailyQuotaUsed()`, hàm đó vừa lật ngày vừa đọc `?? 0`.
+         */
+        carryover_posts_today?: number;
     };
     zalo_session: {
         connected: boolean;

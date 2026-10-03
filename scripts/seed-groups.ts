@@ -5,12 +5,13 @@
  * Chạy: npm run seed:groups -- <lệnh> [tham số]
  *
  *   list                                                    liệt kê tất cả group
- *   add "<tên>" "<url>" [max/ngày=5] [cách nhau tối thiểu(phút)=180]
+ *   add "<tên>" "<url>" [max/ngày=5] [cách nhau tối thiểu(phút)=GROUP_MIN_INTERVAL_MINUTES]
  *   toggle <id>                                              bật/tắt active
  *   remove <id>                                              xoá hẳn
  *   areas <id> "<quận,quận>" | --auto                        khai báo tay khu vực nhóm phục vụ
  */
 import { ObjectId } from "mongodb";
+import { env } from "../src/config/env.js";
 import { closeMongo, connectMongo } from "../src/db/mongoClient.js";
 import { groups } from "../src/db/collections.js";
 import type { GroupDoc } from "../src/models/group.model.js";
@@ -110,7 +111,7 @@ async function add(args: string[]): Promise<void> {
     }
 
     const maxPerDay = maxPerDayRaw ? Number(maxPerDayRaw) : 5;
-    const minInterval = minIntervalRaw ? Number(minIntervalRaw) : 180;
+    const minInterval = minIntervalRaw ? Number(minIntervalRaw) : env.GROUP_MIN_INTERVAL_MINUTES;
 
     if (!Number.isFinite(maxPerDay) || maxPerDay <= 0) {
         console.error("max/ngày phải là số dương");

@@ -1,0 +1,429 @@
+<!doctype html>
+<html lang="vi">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Sale Room Dashboard</title>
+<style>
+:root {
+  --bg: #f6f6f4; --surface: #ffffff; --surface-2: #f0f0ed; --border: #e2e2dd;
+  --ink: #1b1b19; --ink-2: #55554f; --ink-3: #8a8a83;
+  --accent: #2c5fd6; --accent-ink: #ffffff; --bar: #2c5fd6; --bar-track: #dfe7fa;
+  --good: #0ca30c; --warning: #fab219; --serious: #ec835a; --critical: #d03b3b;
+  --good-bg: #e7f6e7; --warning-bg: #fff4dc; --serious-bg: #fdeee8; --critical-bg: #fbe9e9;
+  --good-ink: #0b6b0b; --warning-ink: #7a5300; --serious-ink: #8f3c1c; --critical-ink: #a32424;
+  --mono: ui-monospace, "Cascadia Mono", Consolas, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #121211; --surface: #1a1a19; --surface-2: #232321; --border: #2f2f2c;
+    --ink: #ececea; --ink-2: #b3b3ad; --ink-3: #7d7d77;
+    --accent: #6f98f2; --accent-ink: #0f1830; --bar: #6f98f2; --bar-track: #26314a;
+    --good-bg: #13301a; --warning-bg: #3a2e10; --serious-bg: #3a2218; --critical-bg: #3c1a1a;
+    --good-ink: #7fd67f; --warning-ink: #f5cd72; --serious-ink: #f2a98a; --critical-ink: #f09494;
+  }
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--ink);
+  font: 14px/1.45 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+header { position: sticky; top: 0; z-index: 5; background: var(--surface); border-bottom: 1px solid var(--border); }
+.bar { max-width: 1280px; margin: 0 auto; padding: 12px 16px; display: flex; gap: 12px; align-items: center; flex-wrap: wrap; }
+h1 { font-size: 17px; margin: 0; font-weight: 650; }
+h2 { font-size: 13px; margin: 0 0 10px; font-weight: 650; color: var(--ink-2); text-transform: uppercase; letter-spacing: .04em; }
+main { max-width: 1280px; margin: 0 auto; padding: 16px; display: grid; gap: 16px; }
+.spacer { flex: 1; }
+.muted { color: var(--ink-3); }
+.small { font-size: 12px; }
+.card { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 14px 16px; min-width: 0; }
+.grid { display: grid; gap: 12px; }
+.g-status { grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); }
+.g-kpi { grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); }
+.g-2 { grid-template-columns: repeat(auto-fit, minmax(420px, 1fr)); }
+@media (max-width: 520px) { .g-2 { grid-template-columns: 1fr; } }
+.label { font-size: 12px; color: var(--ink-2); margin-bottom: 4px; }
+.value { font-size: 26px; font-weight: 600; line-height: 1.15; }
+.sub { font-size: 12px; color: var(--ink-3); margin-top: 4px; overflow-wrap: anywhere; }
+.pill { display: inline-flex; align-items: center; gap: 6px; padding: 2px 10px; border-radius: 999px; font-size: 12px; font-weight: 600; white-space: nowrap; }
+.s-good { background: var(--good-bg); color: var(--good-ink); }
+.s-warning { background: var(--warning-bg); color: var(--warning-ink); }
+.s-serious { background: var(--serious-bg); color: var(--serious-ink); }
+.s-critical { background: var(--critical-bg); color: var(--critical-ink); }
+.s-neutral { background: var(--surface-2); color: var(--ink-2); }
+button { font: inherit; font-size: 13px; border: 1px solid var(--border); background: var(--surface); color: var(--ink);
+  border-radius: 7px; padding: 6px 12px; cursor: pointer; }
+button:hover:not(:disabled) { background: var(--surface-2); }
+button:disabled { opacity: .45; cursor: default; }
+button.primary { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
+button.primary:hover:not(:disabled) { filter: brightness(1.08); background: var(--accent); }
+button.danger { color: var(--critical-ink); }
+.btns { display: flex; gap: 6px; flex-wrap: wrap; }
+.alert { border-radius: 10px; padding: 12px 16px; display: flex; gap: 12px; align-items: center; flex-wrap: wrap; border: 1px solid transparent; }
+.alert b { font-weight: 650; }
+.alert .grow { flex: 1; min-width: 220px; }
+.meter { height: 8px; border-radius: 4px; background: var(--bar-track); margin-top: 8px; overflow: hidden; }
+.meter > div { height: 100%; background: var(--bar); border-radius: 4px; }
+table { width: 100%; border-collapse: collapse; font-size: 13px; }
+th { text-align: left; font-weight: 600; color: var(--ink-2); font-size: 12px; padding: 6px 8px; border-bottom: 1px solid var(--border); }
+td { padding: 7px 8px; border-bottom: 1px solid var(--border); vertical-align: top; }
+tr:last-child td { border-bottom: 0; }
+td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
+.scroll { overflow-x: auto; }
+.code { font-family: var(--mono); font-size: 12px; color: var(--ink-2); }
+.empty { color: var(--ink-3); padding: 10px 0; }
+.review { border: 1px solid var(--border); border-radius: 8px; padding: 10px 12px; display: grid; gap: 6px; }
+.review + .review { margin-top: 8px; }
+.review pre { margin: 0; white-space: pre-wrap; font: 12px/1.4 var(--mono); color: var(--ink-2); max-height: 7.5em; overflow: auto;
+  background: var(--surface-2); padding: 6px 8px; border-radius: 6px; }
+.chips { display: flex; gap: 6px; flex-wrap: wrap; }
+.chip { background: var(--surface-2); border-radius: 6px; padding: 3px 9px; font-size: 12px; }
+.chip b { font-variant-numeric: tabular-nums; }
+.hbar { display: flex; align-items: center; gap: 8px; }
+.hbar .track { flex: 1; min-width: 60px; height: 8px; background: var(--bar-track); border-radius: 4px; overflow: hidden; }
+.hbar .fill { height: 100%; background: var(--bar); border-radius: 4px; }
+#logs { height: 380px; overflow: auto; font: 12px/1.5 var(--mono); background: var(--surface-2); border-radius: 8px; padding: 8px 10px; }
+.log { white-space: pre-wrap; overflow-wrap: anywhere; }
+.log .t { color: var(--ink-3); }
+.log .m { color: var(--accent); }
+.log .d { color: var(--ink-3); }
+.lv { display: inline-block; min-width: 44px; font-weight: 600; }
+.lv-warn { color: var(--warning-ink); } .lv-error, .lv-fatal { color: var(--critical-ink); } .lv-info { color: var(--good-ink); }
+.lv-debug, .lv-trace { color: var(--ink-3); }
+#toast { position: fixed; bottom: 16px; left: 50%; transform: translateX(-50%); max-width: min(560px, calc(100% - 32px));
+  background: var(--ink); color: var(--bg); padding: 10px 14px; border-radius: 8px; white-space: pre-wrap; font-size: 13px;
+  opacity: 0; pointer-events: none; transition: opacity .2s; z-index: 10; }
+#toast.show { opacity: 1; }
+select, label.check { font: inherit; font-size: 12px; color: var(--ink-2); }
+select { background: var(--surface); border: 1px solid var(--border); border-radius: 6px; padding: 3px 6px; color: var(--ink); }
+a { color: var(--accent); }
+/* Điện thoại: bảng nhiều chữ xếp dọc từng dòng thay vì ép thành cột hẹp một chữ. */
+@media (max-width: 640px) {
+  table.stack thead { display: none; }
+  table.stack tr { display: block; padding: 8px 0; border-bottom: 1px solid var(--border); }
+  table.stack tr:last-child { border-bottom: 0; }
+  table.stack td { display: block; border: 0; padding: 2px 0; }
+  #logs { height: 280px; }
+}
+</style>
+</head>
+<body>
+<header>
+  <div class="bar">
+    <h1>Sale Room Agent</h1>
+    <span id="agent-pill" class="pill s-neutral">đang tải…</span>
+    <span id="agent-sub" class="muted small"></span>
+    <span class="spacer"></span>
+    <div class="btns">
+      <button id="btn-start" class="primary" data-action="agent/start">▶ Chạy</button>
+      <button id="btn-restart" data-action="agent/restart" data-confirm="Khởi động lại agent? Agent sẽ tắt êm (đóng trình duyệt, chốt tin nhắn đang gom) rồi chạy lại.">⟳ Khởi động lại</button>
+      <button id="btn-stop" class="danger" data-action="agent/stop" data-confirm="Dừng agent? Zalo sẽ ngừng nhận tin và không bài nào được đăng cho tới khi bấm Chạy.">■ Dừng</button>
+    </div>
+  </div>
+</header>
+
+<main>
+  <div id="alerts" class="grid"></div>
+
+  <section class="grid g-status" id="status-cards"></section>
+
+  <section class="card">
+    <h2>Hôm nay <span id="today-date" class="muted"></span></h2>
+    <div class="grid g-kpi" id="kpis"></div>
+  </section>
+
+  <section class="grid g-2">
+    <div class="card">
+      <h2>Tin chờ bạn duyệt</h2>
+      <div id="review"></div>
+    </div>
+    <div class="card">
+      <h2>Lịch đăng sắp tới</h2>
+      <div class="scroll" id="upcoming"></div>
+    </div>
+  </section>
+
+  <section class="card">
+    <h2>Bài đăng gần đây</h2>
+    <div class="scroll" id="recent"></div>
+  </section>
+
+  <section class="grid g-2">
+    <div class="card">
+      <h2>7 ngày gần nhất</h2>
+      <div class="scroll" id="history"></div>
+    </div>
+    <div class="card">
+      <h2>Tin đăng theo trạng thái</h2>
+      <div id="counts" class="chips"></div>
+      <p id="groups" class="sub"></p>
+    </div>
+  </section>
+
+  <section class="card">
+    <div class="bar" style="padding:0 0 10px">
+      <h2 style="margin:0">Log trực tiếp</h2>
+      <span class="spacer"></span>
+      <select id="log-level">
+        <option value="info">info trở lên</option>
+        <option value="warn">chỉ cảnh báo &amp; lỗi</option>
+        <option value="debug">tất cả</option>
+      </select>
+      <label class="check"><input type="checkbox" id="log-follow" checked> tự cuộn</label>
+    </div>
+    <div id="logs"></div>
+    <p class="sub">Chỉ giữ ~1.500 dòng gần nhất từ lúc dashboard chạy. Log đầy đủ nằm trong thư mục <span class="code">logs/</span>.</p>
+  </section>
+</main>
+<div id="toast" role="status"></div>
+
+<script>
+const $ = (id) => document.getElementById(id);
+const esc = (value) => String(value ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
+const fmtTime = (iso) => iso ? new Date(iso).toLocaleString("vi-VN", { timeZone: "Asia/Ho_Chi_Minh", hour: "2-digit", minute: "2-digit", day: "2-digit", month: "2-digit" }) : "—";
+const fmtMoney = (n) => n == null ? null : n >= 1e6 ? `${(n / 1e6).toLocaleString("vi-VN", { maximumFractionDigits: 1 })} tr` : n.toLocaleString("vi-VN");
+function ago(iso) {
+  if (!iso) return "chưa có";
+  const s = Math.round((Date.now() - new Date(iso).getTime()) / 1000);
+  if (s < 60) return `${s}s trước`;
+  if (s < 3600) return `${Math.round(s / 60)} phút trước`;
+  if (s < 86400) return `${Math.round(s / 3600)} giờ trước`;
+  return `${Math.round(s / 86400)} ngày trước`;
+}
+function duration(iso) {
+  if (!iso) return "";
+  const s = Math.round((Date.now() - new Date(iso).getTime()) / 1000);
+  const h = Math.floor(s / 3600), m = Math.floor((s % 3600) / 60);
+  return h > 0 ? `${h} giờ ${m} phút` : `${m} phút`;
+}
+// Trạng thái luôn đi kèm biểu tượng + chữ, không bao giờ chỉ bằng màu.
+const pill = (level, text) => `<span class="pill s-${level}">${esc(text)}</span>`;
+
+function toast(message) {
+  const el = $("toast");
+  el.textContent = message;
+  el.classList.add("show");
+  clearTimeout(toast.timer);
+  toast.timer = setTimeout(() => el.classList.remove("show"), 5000);
+}
+
+async function act(action, confirmText) {
+  if (confirmText && !confirm(confirmText)) return;
+  try {
+    const res = await fetch(`/api/${action}`, { method: "POST", headers: { "x-dashboard-action": "1" } });
+    const body = await res.json().catch(() => ({}));
+    toast(body.message ?? (res.ok ? "Xong" : `Lỗi ${res.status}`));
+  } catch (error) {
+    toast(`Không gọi được dashboard: ${error.message}`);
+  }
+  refresh();
+}
+
+document.addEventListener("click", (event) => {
+  const button = event.target.closest("button[data-action]");
+  if (!button || button.disabled) return;
+  act(button.dataset.action, button.dataset.confirm);
+});
+
+const AGENT_LABEL = {
+  running: ["good", "● Đang chạy"],
+  stopping: ["warning", "… Đang dừng"],
+  stopped: ["neutral", "■ Đã dừng"],
+  backoff: ["critical", "✕ Vừa chết — chờ chạy lại"],
+  external: ["warning", "⚠ Chạy ngoài dashboard"],
+};
+
+function renderAgent(agent) {
+  const [level, text] = AGENT_LABEL[agent.status] ?? ["neutral", agent.status];
+  $("agent-pill").className = `pill s-${level}`;
+  $("agent-pill").textContent = text;
+  let sub = "";
+  if (agent.status === "running") sub = `pid ${agent.pid} · chạy được ${duration(agent.started_at)}`;
+  if (agent.status === "backoff") sub = `tự chạy lại lúc ${fmtTime(agent.next_retry_at)}`;
+  if (agent.status === "stopped" && agent.last_exit) sub = `dừng lúc ${fmtTime(agent.last_exit.at)}`;
+  if (agent.auto_restarts > 0) sub += `${sub ? " · " : ""}đã tự chạy lại ${agent.auto_restarts} lần`;
+  $("agent-sub").textContent = sub;
+  $("btn-start").disabled = agent.status === "running" || agent.status === "stopping";
+  $("btn-stop").disabled = agent.status === "stopped" || agent.status === "stopping" || agent.status === "external";
+  $("btn-restart").disabled = agent.status !== "running";
+}
+
+function renderAlerts(agent, data, error) {
+  const alerts = [];
+  if (error) alerts.push(["critical", "✕ Không đọc được dữ liệu", error, ""]);
+  if (agent.status === "external") alerts.push(["warning", "⚠ Agent đang chạy ở chỗ khác",
+    "Có một agent khác (thường là cửa sổ npm run dev) đang giữ cổng health. Dashboard vẫn xem được số liệu nhưng không điều khiển tiến trình đó; khi nó tắt, dashboard tự nhận quản lý.", ""]);
+  if (agent.status === "backoff") alerts.push(["critical", "✕ Agent vừa dừng bất thường",
+    "Xem các dòng lỗi đỏ trong Log trực tiếp bên dưới để biết lý do.", ""]);
+  if (data?.breakers.facebook.tripped) alerts.push(["critical", "✕ Đăng Facebook đang DỪNG",
+    `Lý do: ${data.breakers.facebook.reason ?? "không rõ"} · từ ${fmtTime(data.breakers.facebook.tripped_at)}. Hệ thống không bao giờ tự mở lại — hãy mở Facebook kiểm tra tài khoản trước khi bấm.`,
+    `<button class="primary" data-action="breaker/resume" data-confirm="Bạn ĐÃ tự mở Facebook kiểm tra và xử lý xong chưa?\n\nMở lại trong lúc tài khoản còn bị hạn chế là cách nhanh nhất biến checkpoint thành khoá tài khoản.">Đã kiểm tra — cho đăng lại</button>`]);
+  if (data?.breakers.zalo.tripped) alerts.push(["serious", "⚠ Cầu dao Zalo đang ngắt",
+    `Lý do: ${data.breakers.zalo.reason ?? "không rõ"}. Thường do mở Zalo Web ở nơi khác. Đóng phiên kia, chạy "npm run resume -- --zalo" rồi bấm Khởi động lại.`, ""]);
+  if (data && data.disk_usage_percent >= data.disk_warn_percent) alerts.push(["serious", "⚠ Ổ đĩa gần đầy",
+    `Đã dùng ${data.disk_usage_percent}%. Chạy "npm run cleanup:images" để dọn ảnh cũ.`, ""]);
+  $("alerts").innerHTML = alerts.map(([level, title, body, action]) =>
+    `<div class="alert s-${level}"><div class="grow"><b>${esc(title)}</b><div class="small">${esc(body)}</div></div>${action}</div>`).join("");
+}
+
+function renderStatus(agent, data) {
+  const cards = [];
+  if (data) {
+    const z = data.zalo;
+    // Cờ "connected" trong DB chỉ được agent tự xoá lúc khởi động, nên agent bị tắt đột ngột thì cờ
+    // kẹt ở true. Agent không chạy thì chắc chắn không có kết nối Zalo nào — đừng tin cờ đó.
+    const agentAlive = agent.status === "running" || agent.status === "external";
+    cards.push(["Zalo", !agentAlive ? pill("neutral", "– Agent không chạy")
+      : z.connected ? pill("good", "● Đã kết nối") : pill("critical", "✕ Mất kết nối"),
+      `Tin cuối: ${ago(z.last_message_at)}${z.last_error ? ` · ${z.last_error}` : ""}`]);
+    const fb = data.breakers.facebook;
+    cards.push(["Đăng Facebook", fb.tripped ? pill("critical", "✕ Đang dừng") : pill("good", "● Bình thường"),
+      `Khung giờ: ${data.posting.windows} · ${data.posting.in_window_now ? "đang trong khung" : "ngoài khung giờ"}`,
+      fb.tripped ? "" : `<button data-action="breaker/pause" data-confirm="Tạm dừng đăng bài? Muốn đăng lại phải bấm 'cho đăng lại' (hoặc /resume trên Telegram).">⏸ Tạm dừng đăng</button>`]);
+    const tg = data.telegram;
+    cards.push(["Bot Telegram", tg == null ? pill("neutral", "? Không rõ (agent tắt)")
+      : !tg.configured ? pill("neutral", "– Chưa cấu hình")
+      : tg.polling ? pill("good", "● Nhận lệnh bình thường") : pill("critical", "✕ Đã chết — mất kênh điều khiển"), ""]);
+    const disk = data.disk_usage_percent;
+    cards.push(["Ổ đĩa", disk >= data.disk_warn_percent ? pill("serious", `⚠ ${disk}% đã dùng`) : pill("good", `✓ ${disk}% đã dùng`),
+      `Cảnh báo ở ${data.disk_warn_percent}%`]);
+  }
+  $("status-cards").innerHTML = cards.map(([label, value, sub, action]) =>
+    `<div class="card"><div class="label">${esc(label)}</div><div>${value}</div>${sub ? `<div class="sub">${esc(sub)}</div>` : ""}${action ? `<div style="margin-top:8px">${action}</div>` : ""}</div>`).join("");
+}
+
+function renderKpis(data) {
+  const t = data.today, p = data.posting;
+  $("today-date").textContent = t.date;
+  const pct = Math.min(100, Math.round((p.posts_today / p.max_posts_per_day) * 100));
+  const tiles = [
+    ["Đã đăng / hạn mức", `${p.posts_today}<span class="muted" style="font-size:16px"> / ${p.max_posts_per_day}</span>`, `<div class="meter" title="${pct}%"><div style="width:${pct}%"></div></div>`],
+    ["Bài tồn hôm trước", p.carryover_pending,
+      `<div class="sub">được đăng trước bài mới · đã bù ${p.carryover_today}/${p.carryover_extra_per_day} suất hôm nay (ngoài hạn mức)</div>`],
+    ["Đang hiển thị", t.posts_success, ""],
+    ["Chờ admin nhóm duyệt", t.posts_pending_approval, `<div class="sub">đã gửi, chưa hiện trên nhóm</div>`],
+    ["Đăng thất bại", t.posts_failed, ""],
+    ["Tin nhận từ Zalo", t.listings_received, `<div class="sub">bỏ qua ${t.listings_ignored}</div>`],
+    ["Tin đã soạn bài", t.compose_count, ""],
+  ];
+  $("kpis").innerHTML = tiles.map(([label, value, extra]) =>
+    `<div><div class="label">${esc(label)}</div><div class="value">${value}</div>${extra}</div>`).join("");
+}
+
+function renderReview(items) {
+  if (items.length === 0) { $("review").innerHTML = `<div class="empty">Không có tin nào chờ duyệt.</div>`; return; }
+  $("review").innerHTML = items.map((r) => {
+    const facts = [r.district, fmtMoney(r.price_vnd), r.images ? `${r.images} ảnh` : "không ảnh",
+      r.confidence != null ? `độ tin cậy ${Math.round(r.confidence * 100)}%` : null].filter(Boolean).join(" · ");
+    return `<div class="review">
+      <div><span class="code">${esc(r.code)}</span> <b>${esc(r.title ?? r.address ?? "(chưa có tiêu đề)")}</b></div>
+      <div class="sub" style="margin:0">${esc(facts)} · ${esc(r.sender)} · ${esc(ago(r.created_at))}</div>
+      ${r.reason ? `<div class="small muted">${esc(r.reason)}</div>` : ""}
+      <pre>${esc(r.raw_text)}</pre>
+      <div class="btns">
+        <button class="primary" data-action="listings/${esc(r.code)}/approve">✓ Duyệt &amp; soạn bài</button>
+        <button class="danger" data-action="listings/${esc(r.code)}/reject" data-confirm="Bỏ qua tin ${esc(r.code)}?">✕ Bỏ qua</button>
+      </div></div>`;
+  }).join("");
+}
+
+const JOB_LABEL = { pending: "○ chờ", claimed: "… đang nhận", processing: "● đang đăng" };
+function renderUpcoming(rows) {
+  if (rows.length === 0) { $("upcoming").innerHTML = `<div class="empty">Không có bài nào trong hàng đợi.</div>`; return; }
+  $("upcoming").innerHTML = `<table class="stack"><thead><tr><th>Giờ dự kiến</th><th>Phòng</th><th>Nhóm</th><th>Trạng thái</th></tr></thead><tbody>${rows.map((r) => `
+    <tr><td style="white-space:nowrap">${esc(fmtTime(r.scheduled_at))}</td>
+    <td><span class="code">${esc(r.listing_code)}</span> ${esc(r.listing)}</td>
+    <td>${esc(r.group)}</td>
+    <td>${r.status === "processing" ? pill("good", "● đang đăng") : r.carryover ? pill("warning", "↻ tồn hôm trước — ưu tiên") : r.overdue ? pill("warning", "⏫ quá giờ — ưu tiên đăng") : pill("neutral", JOB_LABEL[r.status] ?? r.status)}
+      ${r.attempts > 1 ? `<div class="sub">lần thử ${r.attempts}${r.last_error ? ` · ${esc(r.last_error.slice(0, 120))}` : ""}</div>` : ""}</td></tr>`).join("")}</tbody></table>`;
+}
+
+const POST_STATUS = {
+  success: ["good", "✓ Đã hiển thị"], pending_approval: ["warning", "⏳ Chờ admin duyệt"], attempting: ["neutral", "… Đang đăng"],
+  failed: ["critical", "✕ Thất bại"], checkpoint_blocked: ["critical", "✕ Checkpoint"], skipped: ["neutral", "– Bỏ qua"],
+  unknown: ["serious", "? Không rõ — kiểm tra tay"],
+};
+function renderRecent(rows) {
+  if (rows.length === 0) { $("recent").innerHTML = `<div class="empty">Chưa có bài nào trong 7 ngày gần đây.</div>`; return; }
+  $("recent").innerHTML = `<table class="stack"><thead><tr><th>Lúc</th><th>Phòng</th><th>Nhóm</th><th>Kết quả</th><th></th></tr></thead><tbody>${rows.map((r) => {
+    const [level, text] = POST_STATUS[r.status] ?? ["neutral", r.status];
+    const retryable = r.status === "failed";
+    return `<tr><td style="white-space:nowrap">${esc(fmtTime(r.posted_at))}</td>
+      <td><span class="code">${esc(r.listing_code)}</span> ${esc(r.listing)}</td>
+      <td>${r.url ? `<a href="${esc(r.url)}" target="_blank" rel="noopener">${esc(r.group)}</a>` : esc(r.group)}</td>
+      <td>${pill(level, text)}${r.error ? `<div class="sub">${esc(r.error.slice(0, 160))}</div>` : ""}</td>
+      <td>${retryable ? `<button data-action="listings/${esc(r.listing_code)}/retry" data-confirm="Soạn lại và xếp lịch đăng lại tin ${esc(r.listing_code)}?">Thử lại</button>` : ""}</td></tr>`;
+  }).join("")}</tbody></table>`;
+}
+
+function renderHistory(days) {
+  if (days.length === 0) { $("history").innerHTML = `<div class="empty">Chưa có số liệu.</div>`; return; }
+  const max = Math.max(1, ...days.map((d) => d.success + d.pending_approval));
+  $("history").innerHTML = `<table><thead><tr><th>Ngày</th><th class="num">Nhận</th><th class="num">Soạn</th><th>Đăng (hiển thị + chờ duyệt)</th><th class="num">Lỗi</th></tr></thead><tbody>${days.slice().reverse().map((d) => {
+    const posted = d.success + d.pending_approval;
+    return `<tr title="Hiển thị ${d.success} · chờ duyệt ${d.pending_approval}"><td class="code">${esc(d.date.slice(5))}</td>
+      <td class="num">${d.received}</td><td class="num">${d.composed}</td>
+      <td><div class="hbar"><div class="track"><div class="fill" style="width:${(posted / max) * 100}%"></div></div><span class="num" style="min-width:3.5em">${posted}${d.pending_approval ? ` <span class="muted">(${d.pending_approval})</span>` : ""}</span></div></td>
+      <td class="num">${d.failed}</td></tr>`;
+  }).join("")}</tbody></table>`;
+}
+
+const STATUS_ORDER = ["received", "extracting", "parsed", "needs_review", "ready", "queued", "posting", "posted", "failed", "rejected", "ignored", "expired", "duplicate"];
+function renderCounts(counts, groups) {
+  const keys = Object.keys(counts).sort((a, b) => STATUS_ORDER.indexOf(a) - STATUS_ORDER.indexOf(b));
+  $("counts").innerHTML = keys.map((k) => `<span class="chip">${esc(k)} <b>${counts[k]}</b></span>`).join("") || `<span class="muted">Chưa có tin nào.</span>`;
+  $("groups").textContent = `Nhóm Facebook: ${groups.active} đang bật, ${groups.inactive} đang tắt.`;
+}
+
+async function refresh() {
+  try {
+    const res = await fetch("/api/overview");
+    const { agent, data, error } = await res.json();
+    renderAgent(agent);
+    renderAlerts(agent, data, error);
+    renderStatus(agent, data);
+    if (data) {
+      renderKpis(data);
+      renderReview(data.review);
+      renderUpcoming(data.upcoming);
+      renderRecent(data.recent_posts);
+      renderHistory(data.history);
+      renderCounts(data.listing_counts, data.groups);
+    }
+  } catch {
+    $("agent-pill").className = "pill s-critical";
+    $("agent-pill").textContent = "✕ Mất kết nối tới dashboard";
+    $("agent-sub").textContent = "Tiến trình dashboard có thể đã tắt.";
+  }
+}
+
+// ---- Log ----
+const LEVEL_RANK = { trace: 10, debug: 20, info: 30, warn: 40, error: 50, fatal: 60 };
+let lastSeq = 0;
+const logLines = [];
+function renderLogs() {
+  const min = LEVEL_RANK[$("log-level").value];
+  const box = $("logs");
+  box.innerHTML = logLines.filter((l) => LEVEL_RANK[l.level] >= min).slice(-800).map((l) =>
+    `<div class="log"><span class="t">${esc(l.time)}</span> <span class="lv lv-${l.level}">${l.level.toUpperCase()}</span>${l.module ? ` <span class="m">[${esc(l.module)}]</span>` : ""} ${esc(l.msg)}${l.detail ? ` <span class="d">${esc(l.detail)}</span>` : ""}</div>`).join("");
+  if ($("log-follow").checked) box.scrollTop = box.scrollHeight;
+}
+async function pollLogs() {
+  try {
+    const res = await fetch(`/api/logs?after=${lastSeq}`);
+    const lines = await res.json();
+    if (lines.length > 0) {
+      lastSeq = lines[lines.length - 1].seq;
+      logLines.push(...lines);
+      if (logLines.length > 1500) logLines.splice(0, logLines.length - 1500);
+      renderLogs();
+    }
+  } catch { /* dashboard tắt — refresh() đã báo */ }
+}
+$("log-level").addEventListener("change", renderLogs);
+
+refresh();
+pollLogs();
+setInterval(refresh, 5000);
+setInterval(pollLogs, 2000);
+</script>
+</body>
+</html>

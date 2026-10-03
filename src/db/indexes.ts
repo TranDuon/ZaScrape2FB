@@ -77,7 +77,7 @@ export async function ensureAppState(): Promise<void> {
                     last_disconnect_at: null,
                     reconnect_attempts: 0,
                 },
-                daily_counters: { date: businessDateKey(now), total_posts_today: 0 },
+                daily_counters: { date: businessDateKey(now), total_posts_today: 0, carryover_posts_today: 0 },
                 zalo_session: {
                     connected: false,
                     last_connected_at: null,

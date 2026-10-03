@@ -64,6 +64,81 @@ export interface PostOutcome {
     postUrl: string | null;
     imagesUploaded: number;
     durationMs: number;
+    /**
+     * Bài đã gửi đi nhưng nhóm bật kiểm duyệt nên còn nằm chờ quản trị viên duyệt.
+     *
+     * KHÔNG phải lỗi, và tuyệt đối KHÔNG được đăng lại: bài đã nằm trong hàng chờ của nhóm rồi,
+     * đăng lại chỉ tạo ra bài trùng trong hàng chờ đó. Khác biệt duy nhất nằm ở cách báo cho
+     * người dùng — "đã lên nhóm" và "đang chờ duyệt" dẫn tới hai hành động khác hẳn nhau.
+     */
+    pendingApproval: boolean;
+    /** Cụm chữ Facebook đã hiện, để người dùng đối chiếu khi nghi ngờ nhận diện sai. */
+    pendingApprovalEvidence: string | null;
+    /** Ảnh chụp màn hình sau khi đăng, chỉ chụp khi phát hiện chờ duyệt. */
+    pendingApprovalScreenshot: string | null;
+}
+
+/**
+ * Cụm chữ cho biết bài đang chờ quản trị viên nhóm duyệt.
+ *
+ * Cố ý bám vào cách nói về TRẠNG THÁI CỦA MỘT BÀI ("đang chờ phê duyệt", "sẽ hiển thị sau khi")
+ * chứ không bám vào cách nói về NỘI QUY NHÓM ("bài viết phải được phê duyệt"). Hai loại chữ này
+ * cùng chứa từ "phê duyệt" nhưng chỉ loại đầu nói về bài vừa đăng; nhóm bật kiểm duyệt thường
+ * ghi loại sau ngay trong phần mô tả, và nó nằm sẵn trên trang từ trước khi ta đăng.
+ *
+ * Danh sách cố ý HẸP. Bỏ sót một cách nói chỉ khiến bài được báo "đã đăng" y như trước khi có
+ * tính năng này (không hồi quy gì cả), còn bắt nhầm thì báo sai cho MỌI bài vào nhóm đó. Vì thế
+ * mọi cụm mơ hồ giữa "nội quy" và "trạng thái bài" đều bị loại: "quản trị viên phê duyệt",
+ * "sẽ hiển thị sau khi", "an admin approves" đều xuất hiện tự nhiên trong nội quy nhóm.
+ *
+ * Liệt kê cả tiếng Việt lẫn tiếng Anh vì giao diện đổi theo ngôn ngữ tài khoản.
+ */
+const PENDING_APPROVAL_PHRASES = [
+    "đang chờ phê duyệt",
+    "đang chờ được phê duyệt",
+    "chờ được phê duyệt",
+    "đang chờ duyệt",
+    "đang chờ quản trị viên",
+    "đang chờ người kiểm duyệt",
+    "đã gửi để phê duyệt",
+    "bài viết của bạn đang chờ",
+    "bài viết đang chờ phê duyệt",
+    "pending approval",
+    "awaiting approval",
+    "waiting for approval",
+    "is pending",
+];
+
+/**
+ * Những cụm chờ duyệt CHỈ xuất hiện sau khi đăng, loại bỏ chữ vốn đã nằm sẵn trên trang.
+ *
+ * Đây là điểm mấu chốt của phép nhận diện. Nhóm bật kiểm duyệt hay ghi thẳng trong phần mô tả
+ * hoặc nội quy ghim rằng bài phải được duyệt, nên quét chữ cả trang sau khi đăng sẽ báo nhầm
+ * cho MỌI bài vào nhóm đó — kể cả bài lên thẳng. So với ảnh chụp nền lấy lúc trang nhóm vừa mở
+ * (trước khi mở hộp soạn bài) thì phần chữ tĩnh đó bị trừ đi, chỉ còn lại chữ nói về bài vừa gửi.
+ *
+ * Hàm thuần để test được bằng vitest — xem `test/unit/pendingApproval.test.ts`.
+ */
+export function freshApprovalPhrases(baselineText: string, finalText: string): string[] {
+    const before = baselineText.toLowerCase();
+    const after = finalText.toLowerCase();
+
+    return PENDING_APPROVAL_PHRASES.filter((phrase) => after.includes(phrase) && !before.includes(phrase));
+}
+
+/**
+ * Đọc chữ hiển thị của cả trang.
+ *
+ * KHÔNG cắt bớt như `detectCheckpoint`: cảnh báo bị chặn luôn nằm ở đầu trang, còn thông báo
+ * chờ duyệt là một hộp thoại/toast có thể nằm bất kỳ đâu trong DOM.
+ */
+async function readVisibleText(page: Page): Promise<string> {
+    try {
+        return (await page.locator("body").innerText({ timeout: 5_000 })) ?? "";
+    } catch {
+        // Trang đang chuyển hướng hoặc chưa dựng xong — trả chuỗi rỗng để không kết luận bừa.
+        return "";
+    }
 }
 
 /** Dừng ngay nếu Facebook đã chặn — thao tác tiếp chỉ làm nghi ngờ tăng lên. */
@@ -235,6 +310,11 @@ export async function postToGroup(page: Page, request: PostRequest): Promise<Pos
     await page.mouse.wheel(0, 300 + Math.floor(Math.random() * 500));
     await humanPause();
 
+    // Ảnh chụp chữ trên trang khi CHƯA đăng gì. Phải lấy ở đây, trước cả khi mở hộp soạn bài:
+    // nhóm bật kiểm duyệt thường ghi sẵn "bài viết phải được phê duyệt" trong mô tả/nội quy, và
+    // nếu không trừ phần chữ tĩnh đó đi thì mọi bài vào nhóm này đều bị báo nhầm là chờ duyệt.
+    const approvalBaseline = await readVisibleText(page);
+
     const opener = await findRequired(page, "openComposer", 15_000);
     await opener.click();
     await humanPause();
@@ -270,6 +350,12 @@ export async function postToGroup(page: Page, request: PostRequest): Promise<Pos
     // Cửa cuối trước khi nội dung ra công khai: mọi thứ từ đây trở đi không thu hồi được.
     await verifyComposedText(page, request.text);
 
+    // Nền lần hai, ngay trước khi bấm Đăng. Facebook tải nội dung dần, nên phần mô tả/nội quy nhóm
+    // có thể hiện ra SAU lần đọc nền đầu tiên — nếu chỉ so với lần đầu thì chữ nội quy tới muộn sẽ
+    // bị tính là "mới xuất hiện" và mọi bài vào nhóm đó đều bị báo nhầm là chờ duyệt. Gộp hai lần
+    // đọc lại làm nền: thông báo chờ duyệt thật chỉ hiện SAU khi bấm Đăng nên không thể lọt vào đây.
+    const approvalBaselineBeforeSubmit = await readVisibleText(page);
+
     const submit = await findRequired(page, "submitButton", 10_000);
     await humanPause();
     await submit.click();
@@ -278,11 +364,32 @@ export async function postToGroup(page: Page, request: PostRequest): Promise<Pos
     await humanPause(4_000, 8_000);
     await assertNotBlocked(page, "sau-khi-dang");
 
+    const fresh = freshApprovalPhrases(
+        `${approvalBaseline}\n${approvalBaselineBeforeSubmit}`,
+        await readVisibleText(page),
+    );
+    const pendingApproval = fresh.length > 0;
+    let pendingApprovalScreenshot: string | null = null;
+
+    if (pendingApproval) {
+        // Chụp màn hình vì đây là phép nhận diện dựa trên chữ hiển thị, mà chữ thì Facebook đổi
+        // được bất cứ lúc nào. Có ảnh thì người dùng tự đối chiếu được ngay là bài thật sự đang
+        // chờ duyệt hay nhận diện sai, và cũng là căn cứ để bổ sung cụm chữ mới về sau.
+        pendingApprovalScreenshot = await captureScreenshot(page, "cho-duyet");
+        log.info(
+            { phrases: fresh, screenshot: pendingApprovalScreenshot },
+            "Bài đã gửi nhưng nhóm bật kiểm duyệt — đang chờ quản trị viên duyệt",
+        );
+    }
+
     return {
         // Facebook không hiển thị link bài vừa đăng ở chỗ nào ổn định để lấy tự động;
         // để null còn hơn bịa ra một đường dẫn có thể sai.
         postUrl: null,
         imagesUploaded,
         durationMs: Date.now() - startedAt,
+        pendingApproval,
+        pendingApprovalEvidence: pendingApproval ? fresh.join(", ") : null,
+        pendingApprovalScreenshot,
     };
 }

@@ -93,6 +93,19 @@ export async function checkSession(page: Page): Promise<SessionStatus> {
     await page.goto("https://www.facebook.com/", { waitUntil: "domcontentloaded" });
     await humanPause();
 
+    return inspectSession(page);
+}
+
+/**
+ * Đọc trạng thái đăng nhập của trang ĐANG mở, KHÔNG điều hướng đi đâu cả.
+ *
+ * Tách khỏi `checkSession` vì vòng chờ trong `scripts/login-facebook.ts` gọi lại liên tục vài giây
+ * một lần. Nếu mỗi lần kiểm tra đều `page.goto` về facebook.com thì trang bị tải lại ngay dưới tay
+ * người đang gõ — email, mật khẩu, mã xác minh đều bị xoá sạch trước khi kịp bấm Đăng nhập, và
+ * việc đăng nhập tay trở nên bất khả thi. Nơi nào cần đảm bảo đang đứng ở facebook.com thì dùng
+ * `checkSession`; nơi nào chỉ muốn biết "giờ đã đăng nhập chưa" thì dùng hàm này.
+ */
+export async function inspectSession(page: Page): Promise<SessionStatus> {
     const checkpoint = await detectCheckpoint(page);
     if (checkpoint.detected) {
         return { loggedIn: false, reason: `Facebook chặn phiên (${checkpoint.kind}): ${checkpoint.evidence}` };

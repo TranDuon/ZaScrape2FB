@@ -2,6 +2,7 @@ import { ObjectId } from "mongodb";
 import { env } from "../config/env.js";
 import { APP_STATE_ID } from "../config/constants.js";
 import { appState, dailyMetrics, groups, listings, postJobs } from "../db/collections.js";
+import { dailyQuotaUsed } from "../facebook/rateLimiter.js";
 import { enqueueJob } from "../jobs/jobQueue.js";
 import { recomposeListing } from "../listings/recompose.js";
 import type { ListingDoc, ListingStatus } from "../models/listing.model.js";
@@ -41,7 +42,12 @@ async function setStatus(listingId: ObjectId, status: ListingStatus, note: strin
     );
 }
 
-async function approve(code: string): Promise<string> {
+/**
+ * Các thao tác dưới đây được export để dashboard (src/dashboard/) dùng lại NGUYÊN logic của
+ * Telegram thay vì viết lại một bản thứ hai — hai bản sẽ lệch nhau ngay lần sửa đầu tiên.
+ * `via` chỉ đổi dòng ghi chú trong status_history, để còn biết thao tác đến từ đâu.
+ */
+export async function approve(code: string, via = "Telegram"): Promise<string> {
     const listing = await findListing(code);
     if (!listing) return `Không tìm thấy tin đăng "${code}"`;
 
@@ -52,20 +58,20 @@ async function approve(code: string): Promise<string> {
     }
 
     await listings().updateOne({ _id: listingId }, { $set: { "review.action": "approved" } });
-    await setStatus(listingId, "ready", "Người dùng duyệt qua Telegram");
+    await setStatus(listingId, "ready", `Người dùng duyệt qua ${via}`);
     await enqueueJob({ type: "compose_post", listingId });
 
     log.info({ listing_id: listingId }, "Tin đăng được duyệt");
     return `✅ Đã duyệt. Đang soạn bài đăng...`;
 }
 
-async function reject(code: string): Promise<string> {
+export async function reject(code: string, via = "Telegram"): Promise<string> {
     const listing = await findListing(code);
     if (!listing) return `Không tìm thấy tin đăng "${code}"`;
 
     const listingId = listing._id as ObjectId;
     await listings().updateOne({ _id: listingId }, { $set: { "review.action": "rejected" } });
-    await setStatus(listingId, "rejected", "Người dùng từ chối qua Telegram");
+    await setStatus(listingId, "rejected", `Người dùng từ chối qua ${via}`);
 
     return "❌ Đã bỏ qua tin này.";
 }
@@ -123,7 +129,7 @@ async function edit(args: string[]): Promise<string> {
     return `✏️ Đã cập nhật ${field} = ${value}`;
 }
 
-async function pause(): Promise<string> {
+export async function pause(): Promise<string> {
     const now = new Date();
     await appState().updateOne(
         { _id: APP_STATE_ID },
@@ -147,7 +153,7 @@ async function pause(): Promise<string> {
  * Lời nhắc kiểm tra tài khoản là cố ý: người dùng hay gõ /resume theo phản xạ
  * mà chưa thực sự mở Facebook xem có chuyện gì.
  */
-async function resume(): Promise<string> {
+export async function resume(): Promise<string> {
     const state = await appState().findOne({ _id: APP_STATE_ID });
 
     if (!state?.circuit_breaker.tripped) {
@@ -189,6 +195,11 @@ async function status(): Promise<string> {
 
     const activeGroups = await groups().countDocuments({ active: true });
 
+    // Đọc qua `dailyQuotaUsed()` (đi qua `postsTodayCount()`) để bộ đếm tự lật sang ngày mới. Đọc số thô ở đây từng làm
+    // /status báo "10/10" suốt nhiều ngày sau ngày cuối cùng đăng đủ hạn mức, khiến việc
+    // hệ thống đã ngừng đăng trông y hệt một ngày đã dùng hết hạn mức.
+    const quota = await dailyQuotaUsed();
+
     const lines = [
         "📊 TRẠNG THÁI HỆ THỐNG",
         "",
@@ -196,7 +207,8 @@ async function status(): Promise<string> {
         state?.zalo_circuit_breaker.tripped ? `  ⚠️ Cầu dao Zalo ngắt: ${state.zalo_circuit_breaker.reason}` : "",
         `Facebook: ${state?.circuit_breaker.tripped ? `⚠️ ĐANG DỪNG (${state.circuit_breaker.reason})` : "bình thường"}`,
         `Group đang bật: ${activeGroups}`,
-        `Đã đăng hôm nay: ${state?.daily_counters.total_posts_today ?? 0}/${env.MAX_POSTS_PER_DAY}`,
+        `Đã đăng hôm nay: ${quota.regular}/${env.MAX_POSTS_PER_DAY}` +
+            (quota.carryover > 0 ? ` (+${quota.carryover} bài tồn, ngoài hạn mức)` : ""),
         "",
         "Tin đăng:",
         ...byStatus.map((row) => `  ${row._id}: ${row.n}`),
@@ -226,7 +238,10 @@ async function stats(): Promise<string> {
         lines.push(
             `${day._id}${isToday ? " (hôm nay)" : ""}`,
             `  nhận ${day.listings_received ?? 0} | bỏ qua ${day.listings_ignored ?? 0}`,
-            `  đăng thành công ${day.posts_success ?? 0} | thất bại ${day.posts_failed ?? 0}`,
+            // Tách "chờ duyệt" khỏi "hiển thị": gộp lại sẽ làm thống kê trông đẹp hơn thực tế,
+            // vì bài chờ duyệt chưa ai trên nhóm nhìn thấy và vẫn có thể bị từ chối hẳn.
+            `  đã hiển thị ${day.posts_success ?? 0} | chờ duyệt ${day.posts_pending_approval ?? 0}` +
+                ` | thất bại ${day.posts_failed ?? 0}`,
             avgExtract > 0 ? `  trích xuất trung bình ${(avgExtract / 1000).toFixed(1)}s` : "",
             "",
         );
@@ -235,7 +250,7 @@ async function stats(): Promise<string> {
     return lines.filter((line) => line !== undefined).join("\n");
 }
 
-async function retry(code: string): Promise<string> {
+export async function retry(code: string): Promise<string> {
     const listing = await findListing(code);
     if (!listing) return `Không tìm thấy tin đăng "${code}"`;
 

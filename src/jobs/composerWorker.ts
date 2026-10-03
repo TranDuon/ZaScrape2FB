@@ -13,6 +13,7 @@ import { childLogger } from "../utils/logger.js";
 import { businessDateKey } from "../utils/time.js";
 import { collectJobBatch } from "./batchCollector.js";
 import { completeJob, deferJob, enqueueJob, failJob } from "./jobQueue.js";
+import { addActiveMinutes, firstWindowStartOn } from "../utils/activeWindows.js";
 
 const log = childLogger("jobs:composer");
 
@@ -63,9 +64,7 @@ async function composedToday(): Promise<number> {
 /** Đầu khung giờ đăng của ngày mai, theo giờ VN — mốc sớm nhất một tin bị hoãn có thể chạy lại. */
 function nextActiveWindowStart(): Date {
     const tomorrow = new Date(Date.now() + 24 * 60 * 60 * 1000);
-    const key = businessDateKey(tomorrow);
-    // Chuỗi ISO kèm offset +07:00 để mốc này là giờ VN thật, không phụ thuộc giờ hệ thống VPS.
-    return new Date(`${key}T${String(env.ACTIVE_HOURS_START).padStart(2, "0")}:00:00+07:00`);
+    return firstWindowStartOn(businessDateKey(tomorrow), env.ACTIVE_WINDOWS);
 }
 
 /**
@@ -125,15 +124,19 @@ function assignVariations(groupCount: number, variations: PostVariation[]): Post
  * `startOffsetMinutes` cho phép cộng dồn XUYÊN SUỐT cả lô: soạn 3 phòng một lượt mà mỗi phòng
  * lại đếm lại từ 0 thì bài của ba phòng chồng lên nhau ngay trong cùng vài phút đầu — đúng thứ
  * mà việc giãn cách sinh ra để tránh. Trả kèm mốc cuối để phòng kế tiếp nối tiếp từ đó.
+ *
+ * Độ lệch được đếm bằng PHÚT TRONG KHUNG GIỜ ĐĂNG (`addActiveMinutes`), không phải giờ đồng hồ:
+ * soạn lúc 13h mà cộng thẳng thì cả lô rơi vào giờ nghỉ chiều rồi cùng quá hạn một lúc khi khung
+ * tối mở. Soạn ngoài khung thì bài đầu lên sau khi khung kế tiếp mở vài chục phút.
  */
 function staggeredSchedule(groupCount: number, startOffsetMinutes: number): { times: Date[]; nextOffset: number } {
-    const now = Date.now();
+    const now = new Date();
     const times: Date[] = [];
     let offsetMinutes = startOffsetMinutes;
 
     for (let index = 0; index < groupCount; index++) {
         offsetMinutes += randomInt(env.COMPOSE_STAGGER_MIN_MINUTES, env.COMPOSE_STAGGER_MAX_MINUTES);
-        times.push(new Date(now + offsetMinutes * 60_000));
+        times.push(addActiveMinutes(now, offsetMinutes, env.ACTIVE_WINDOWS));
     }
 
     return { times, nextOffset: offsetMinutes };
