@@ -3,7 +3,7 @@ import { env } from "../config/env.js";
 import { APP_STATE_ID } from "../config/constants.js";
 import { appState, groups, listings, postHistory, postJobs } from "../db/collections.js";
 import { incrementDailyMetric } from "../db/indexes.js";
-import { checkSession, newPage } from "../facebook/fbBrowser.js";
+import { checkSession, newPage, withBrowserLock } from "../facebook/fbBrowser.js";
 import { CheckpointError, postToGroup } from "../facebook/fbPoster.js";
 import { isCarryoverJob, type PostKind } from "../facebook/dailyQuota.js";
 import { checkPostingAllowed, recordSuccessfulPost } from "../facebook/rateLimiter.js";
@@ -32,7 +32,7 @@ export type NotifyFn = (message: string) => Promise<void> | void;
  * tự động thử lại sau vài phút là cách chắc chắn nhất để chuyển từ "bị nghi ngờ"
  * sang "bị khoá". Chỉ người dùng mới được mở lại, sau khi tự kiểm tra tài khoản.
  */
-async function tripCircuitBreaker(
+export async function tripCircuitBreaker(
     reason: string,
     notify: NotifyFn,
     screenshotPath: string | null = null,
@@ -356,7 +356,8 @@ export async function runPostingOnce(notify: NotifyFn, scope: PostScope = "any")
 
         let outcome: JobOutcome;
         try {
-            outcome = await processJob(job, notify);
+            // Giữ khoá trình duyệt suốt job: inboxWatcher không được điều hướng tab giữa lúc đang đăng.
+            outcome = await withBrowserLock(() => processJob(job, notify));
         } catch (error) {
             log.error({ err: error }, "Lỗi ngoài dự kiến khi đăng bài");
             await failJob(job, error, RETRY_BASE_MS);

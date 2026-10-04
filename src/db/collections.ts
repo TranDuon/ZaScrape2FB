@@ -7,6 +7,7 @@ import type { JobDoc } from "../models/job.model.js";
 import type { PostHistoryDoc } from "../models/postHistory.model.js";
 import type { AppStateDoc } from "../models/appState.model.js";
 import type { DailyMetricsDoc } from "../models/dailyMetrics.model.js";
+import type { FbInboxThreadDoc } from "../models/fbInboxThread.model.js";
 
 export const listings = (): Collection<ListingDoc> => getDb().collection<ListingDoc>(COLLECTIONS.listings);
 export const groups = (): Collection<GroupDoc> => getDb().collection<GroupDoc>(COLLECTIONS.groups);
@@ -16,3 +17,5 @@ export const postHistory = (): Collection<PostHistoryDoc> =>
 export const appState = (): Collection<AppStateDoc> => getDb().collection<AppStateDoc>(COLLECTIONS.appState);
 export const dailyMetrics = (): Collection<DailyMetricsDoc> =>
     getDb().collection<DailyMetricsDoc>(COLLECTIONS.dailyMetrics);
+export const fbInboxThreads = (): Collection<FbInboxThreadDoc> =>
+    getDb().collection<FbInboxThreadDoc>(COLLECTIONS.fbInboxThreads);

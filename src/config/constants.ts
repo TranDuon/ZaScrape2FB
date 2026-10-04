@@ -6,6 +6,7 @@ export const COLLECTIONS = {
     postHistory: "post_history",
     appState: "app_state",
     dailyMetrics: "daily_metrics",
+    fbInboxThreads: "fb_inbox_threads",
 } as const;
 
 /** `app_state` là document singleton duy nhất. */

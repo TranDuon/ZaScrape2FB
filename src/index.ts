@@ -4,6 +4,7 @@ import { appState } from "./db/collections.js";
 import { ensureAppState, ensureIndexes } from "./db/indexes.js";
 import { APP_STATE_ID } from "./config/constants.js";
 import { closeBrowser } from "./facebook/fbBrowser.js";
+import { startInboxWatcher, stopInboxWatcher } from "./facebook/inboxWatcher.js";
 import { startHealthServer, stopHealthServer } from "./health/healthServer.js";
 import { startComposerWorker } from "./jobs/composerWorker.js";
 import { startExtractionWorker } from "./jobs/extractionWorker.js";
@@ -16,6 +17,7 @@ import { startScheduler, stopScheduler } from "./scheduler/cronRunner.js";
 import { formatActiveWindows } from "./utils/activeWindows.js";
 import { logger } from "./utils/logger.js";
 import { installShutdownHandlers, isShuttingDown, onShutdown } from "./utils/shutdown.js";
+import { DirectMessageAlert } from "./zalo/directMessageAlert.js";
 import { MessageListener } from "./zalo/messageListener.js";
 import { ReconnectManager } from "./zalo/reconnectManager.js";
 
@@ -59,7 +61,7 @@ async function main(): Promise<void> {
         logger.warn(sweep, "Đã dọn job dở dang của lần chạy trước");
     }
 
-    const listener = new MessageListener();
+    const listener = new MessageListener(new DirectMessageAlert(sendNotification));
     const reconnect = new ReconnectManager(listener, notifyZaloIssue);
 
     onShutdown("zalo-listener", async () => {
@@ -81,6 +83,12 @@ async function main(): Promise<void> {
     // Đóng trình duyệt SAU khi bộ điều phối dừng hẳn: đóng lúc Playwright đang thao tác
     // có thể làm hỏng hồ sơ trình duyệt, mà hồ sơ hỏng thì phải đăng nhập Facebook lại bằng tay.
     onShutdown("fb-browser", closeBrowser);
+
+    // Báo khách nhắn Messenger (cả "Tin nhắn đang chờ" của người lạ) lên Telegram. Dùng chung trình
+    // duyệt với việc đăng bài, qua khoá withBrowserLock. Đăng ký SAU fb-browser vì các bước tắt chạy
+    // theo thứ tự ngược: lịch này phải dừng trước khi trình duyệt bị đóng.
+    startInboxWatcher(sendNotification);
+    onShutdown("inbox-watcher", stopInboxWatcher);
 
     // Dọn ảnh/screenshot cũ hàng ngày + cảnh báo đầy đĩa hàng giờ — không liên quan tới pipeline
     // đăng bài nên bật độc lập, không phụ thuộc circuit breaker nào.
@@ -111,6 +119,7 @@ async function main(): Promise<void> {
         "Hạn mức đăng": `${env.MAX_POSTS_PER_DAY} bài/ngày`,
         "Khung giờ đăng": formatActiveWindows(env.ACTIVE_WINDOWS),
         "Trình duyệt": env.FB_HEADLESS ? "chạy ngầm" : "hiện cửa sổ",
+        "Báo tin nhắn khách": `Zalo 1-1: ${env.ZALO_DM_ALERT_ENABLED ? "bật" : "tắt"}, Messenger: ${env.FB_INBOX_CHECK_CRON.trim() || "tắt"}`,
     };
 
     logger.info(summary, "Agent đang chạy");

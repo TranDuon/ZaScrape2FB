@@ -1,5 +1,5 @@
 import { MongoServerError, type ObjectId } from "mongodb";
-import type { API, Message } from "zca-js";
+import { ThreadType, type API, type Message } from "zca-js";
 import { env } from "../config/env.js";
 import { APP_STATE_ID } from "../config/constants.js";
 import { appState, listings } from "../db/collections.js";
@@ -8,6 +8,7 @@ import { enqueueJob } from "../jobs/jobQueue.js";
 import { childLogger } from "../utils/logger.js";
 import { businessDateKey } from "../utils/time.js";
 import type { ListingDoc } from "../models/listing.model.js";
+import type { DirectMessageAlert } from "./directMessageAlert.js";
 import { downloadImages } from "./mediaDownloader.js";
 import { MessageBatcher, type CollectedBatch } from "./messageBatcher.js";
 import { parseIncomingMessage } from "./messageParser.js";
@@ -19,7 +20,7 @@ const DUPLICATE_KEY = 11000;
 export class MessageListener {
     private readonly batcher: MessageBatcher;
 
-    constructor() {
+    constructor(private readonly directMessages: DirectMessageAlert | null = null) {
         this.batcher = new MessageBatcher(env.ZALO_BATCH_WINDOW_MS, env.ZALO_BATCH_MAX_MS, (batch) =>
             this.persistBatch(batch),
         );
@@ -27,6 +28,7 @@ export class MessageListener {
 
     /** Gắn handler vào listener của zca-js. Việc start/stop do reconnectManager điều phối. */
     attach(api: API): void {
+        this.directMessages?.setApi(api);
         api.listener.on("message", (message) => {
             void this.handleMessage(message).catch((error) => {
                 log.error({ err: error }, "Xử lý tin nhắn thất bại");
@@ -45,6 +47,13 @@ export class MessageListener {
     private async handleMessage(message: Message): Promise<void> {
         // Bỏ qua tin do chính tài khoản này gửi, nếu không bot sẽ tự xử lý tin của mình.
         if (message.isSelf) return;
+
+        // Tin riêng 1-1 là KHÁCH nhắn tới (số này in trên mọi bài đăng), không phải tin đăng phòng:
+        // rẽ sang báo Telegram và dừng ở đây, không bao giờ đi vào bộ gom batch.
+        if (message.type === ThreadType.User) {
+            await this.directMessages?.handle(message);
+            return;
+        }
 
         const threadId = message.threadId;
         const senderId = message.data.uidFrom;

@@ -41,10 +41,11 @@ npm run cleanup:images        # delete images/screenshots past retention (see IM
 npm run cleanup:images -- --force   # ignore retention age, delete everything eligible by status now
 npm run backup:sessions       # snapshot Zalo session + FB browser profile into SESSION_BACKUP_DIR
 
-npm test                      # vitest, 13 files: messageBatcher/messageParser, confidenceGate,
+npm test                      # vitest, test/unit/*.test.ts: messageBatcher/messageParser, confidenceGate,
                                # numberParser, scheduleLogic, time, activeWindows, llmBatch (index mapping),
                                # batchCollector, areaMatcher, composeBudget, composedText,
-                               # pendingApproval — no API
+                               # pendingApproval, postingOnce, dailyQuota, inboxParser,
+                               # directMessageAlert — no API
 npm run test:watch            # vitest in watch mode
 npm run test:extractor        # runs test/fixtures/sample-messages.json through real Gemini calls
 npm run test:jobqueue         # concurrent-claim + retry-after-failure, against real Atlas, self-cleaning
@@ -700,6 +701,55 @@ automatically. `npm run resume` is the CLI fallback, and it exists to break a sp
 breaker tripped **and** Telegram unreachable leaves the agent permanently stopped with no recovery
 path short of hand-editing MongoDB. It keeps the design intent intact — still a deliberate human
 action, still no auto-clearing — and `--status` reads breaker state without changing anything.
+
+### Customer message alerts: Zalo 1-1 and the Messenger inbox, read-only
+
+Added 2026-10-04 because customers *were* replying and nobody saw it. The first read of the posting
+account's Messenger found **15 conversations, all in "Tin nhắn đang chờ"** (message requests — Facebook
+sends no notification for these), 8 of them customers asking about rooms within the previous two
+weeks. That contradicts the earlier "≈250 posts, zero contacts" reading: the contacts existed, they
+were landing in a folder nobody opened, on an account nobody had on their phone.
+
+**Zalo** (`src/zalo/directMessageAlert.ts`): `MessageListener.handleMessage` now sends every
+`ThreadType.User` message to `DirectMessageAlert` and returns — a 1-1 message is a customer, never a
+listing, and never reaches the batcher (with `ZALO_ALLOWED_THREAD_IDS` empty it used to be batched
+as a listing). Friends are loaded with `api.getAllFriends()` on each (re)connect and every 6 h, so the
+alert can say **NGƯỜI LẠ** — Zalo files strangers under "Tin nhắn từ người lạ", which is the part
+that gets missed. `SenderCooldown` sends the *first* message of a burst immediately and folds the rest
+for `ZALO_DM_ALERT_COOLDOWN_MINUTES`; customers type in several short lines and one alert per line
+trains the user to ignore the channel. It only reads and notifies — auto-replying from a personal
+account over an unofficial API is the fastest way to get the number banned.
+
+**Messenger** (`src/facebook/inboxWatcher.ts` + pure `inboxParser.ts`): on `FB_INBOX_CHECK_CRON`
+(default every 15 min, 6h–23h59, 3 min jitter, empty = off) it opens a **second tab** in the posting
+browser, reads `/messages/` and `/messages/requests/`, closes the tab, and diffs against
+`fb_inbox_threads` in MongoDB. Things that are easy to break:
+
+- **`withBrowserLock` (fbBrowser.ts) serialises every browser user.** `runPostingOnce` holds it for
+  the whole `processJob`; the inbox check holds it for its whole visit. Without it the inbox check
+  could navigate while Playwright is typing a post. Any future browser task must take the same lock.
+- **Checkpoint detection runs only when no conversation rows could be read.** `detectCheckpoint`'s
+  text signals scan the top of the page, and on Messenger that includes message previews — a common
+  phishing message ("trang của bạn vi phạm tiêu chuẩn cộng đồng") would otherwise trip the breaker and
+  stop all posting. Rows readable ⇒ session alive and page not blocked. A real block (URL
+  `/checkpoint/`, `/login/`, or text with no list) still trips the breaker, same as posting.
+- **Skipped entirely while the Facebook breaker is tripped** — extra page loads on a suspected
+  account make things worse.
+- **Messages are end-to-end encrypted, so content is unreadable** ("Không khôi phục được tin nhắn" —
+  the agent's browser has no E2EE restore PIN). New activity is therefore detected two independent
+  ways: preview text changed, or the last-activity estimate from the relative label moved forward.
+  Only minute-precision labels (< 60 min) are trusted for that; "10 giờ" is ±1 h and would false-alarm.
+  The 15-minute schedule guarantees a new message is seen while still in minute range. All E2EE
+  placeholders normalise to one value so switching between them isn't "new".
+- **First run (empty collection) is a baseline**: it stores everything and sends ONE summary of
+  conversations whose last message isn't ours, newest first, instead of N "new message" alerts.
+  Deleting `fb_inbox_threads` re-runs it.
+- Three consecutive unreadable reads (no rows, no checkpoint) send one Telegram warning: an empty
+  inbox and a changed UI look identical from one read.
+
+`test/unit/inboxParser.test.ts` uses the real `innerText` strings from the 2026-10-04 probe, and
+checks both directions: must alert on a new E2EE message (unchanged preview), must not re-alert as the
+label ages.
 
 ### The funnel is capped at intake, not at the end
 

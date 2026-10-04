@@ -70,6 +70,23 @@ export async function closeBrowser(): Promise<void> {
     }
 }
 
+let browserQueue: Promise<unknown> = Promise.resolve();
+
+/**
+ * Cho từng việc dùng trình duyệt chạy LẦN LƯỢT, không bao giờ chồng lên nhau.
+ *
+ * Trình duyệt chỉ có một hồ sơ và một phiên Facebook, nhưng nay có hai việc dùng nó: đăng bài (bộ
+ * điều phối) và kiểm tra hộp thư (inboxWatcher), mỗi việc một lịch cron riêng. Để chúng chạy cùng
+ * lúc thì một bên có thể điều hướng đi ngay giữa lúc bên kia đang gõ bài — và hai luồng thao tác
+ * song song trên cùng một tài khoản cũng là dấu hiệu bot rõ ràng.
+ */
+export function withBrowserLock<T>(task: () => Promise<T>): Promise<T> {
+    const run = browserQueue.then(task, task);
+    // Hàng đợi không được "kẹt" vì một việc lỗi: việc sau vẫn chạy dù việc trước ném lỗi.
+    browserQueue = run.catch(() => undefined);
+    return run;
+}
+
 export async function newPage(): Promise<Page> {
     const browserContext = await getBrowserContext();
     const pages = browserContext.pages();

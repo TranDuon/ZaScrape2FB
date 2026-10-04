@@ -65,6 +65,14 @@ const envSchema = z.object({
     LISTINGS_PER_THREAD_OVERRIDES: csvNumberMap,
     ZALO_RECONNECT_MAX_ATTEMPTS: z.coerce.number().int().positive().default(5),
     ZALO_RECONNECT_MAX_BACKOFF_MS: z.coerce.number().int().positive().default(300_000),
+    // Báo tin nhắn RIÊNG (1-1) gửi tới tài khoản Zalo của agent lên Telegram — khách nhắn hỏi phòng,
+    // nhất là người lạ (Zalo dồn vào mục "Tin nhắn từ người lạ", rất dễ sót). Mỗi người chỉ báo một
+    // lần trong ZALO_DM_ALERT_COOLDOWN_MINUTES để khách nhắn liền 10 dòng không thành 10 thông báo.
+    ZALO_DM_ALERT_ENABLED: z
+        .string()
+        .default("true")
+        .transform((value) => value === "true" || value === "1"),
+    ZALO_DM_ALERT_COOLDOWN_MINUTES: z.coerce.number().int().min(0).default(10),
 
     // GEMINI_API_KEY để rỗng vẫn khởi động được: listener Zalo phải chạy tiếp
     // dù chưa cấu hình LLM. Worker trích xuất sẽ tự tắt và báo rõ lý do.
@@ -112,6 +120,10 @@ const envSchema = z.object({
         .transform((value) => value === "true" || value === "1"),
     FB_SCREENSHOT_DIR: z.string().default("./data/fb-screenshots"),
     FB_ACTION_TIMEOUT_MS: z.coerce.number().int().positive().default(30_000),
+    // Lịch kiểm tra hộp thư Messenger của tài khoản đăng bài (cả "Tin nhắn đang chờ" của người lạ)
+    // để báo khách nhắn tin lên Telegram. Để RỖNG = tắt. Mỗi lần kiểm tra là 2 lượt tải trang
+    // Messenger, nên đừng dày hơn 10 phút — xem inboxWatcher.ts.
+    FB_INBOX_CHECK_CRON: z.string().default("*/15 6-23 * * *"),
 
     // Mặc định CỐ Ý thấp. Tài khoản Facebook mới gần như không có điểm tin cậy,
     // đăng nhiều bài mỗi ngày là cách nhanh nhất để bị checkpoint. Chỉ nên tăng dần

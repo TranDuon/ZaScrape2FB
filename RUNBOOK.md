@@ -181,6 +181,15 @@ nâng dung lượng ổ.
 4. Tắt/giết thẳng tiến trình dashboard (Task Manager) sẽ **giết cứng agent theo**, cả Chrome của
    Playwright (job object của Windows). Luôn tắt bằng nút **Dừng** hoặc `npm run dashboard:stop`.
    Hồ sơ trình duyệt hỏng nghĩa là phải đăng nhập Facebook lại bằng tay.
+5. **Đã bấm Tắt máy / Khởi động lại nhưng máy không tắt hẳn** (một ứng dụng chặn lại, hoặc bấm Huỷ):
+   Windows vẫn đóng các ứng dụng của phiên trước đó, nên dashboard và agent đã chết. Máy không đăng
+   xuất nên shortcut Startup không chạy lại, và agent nằm im cho tới lần đăng nhập sau. Gặp ngày
+   2026-10-04: log dừng 02:40, Event Viewer → System có sự kiện **1073** ("restart/shutdown ... failed")
+   lúc 02:56. Cách xử lý: chạy lại `wscript scripts\autostart\launch-hidden.vbs` (hoặc đăng xuất rồi
+   đăng nhập lại).
+6. **Máy ngủ thì agent cũng ngủ.** Các việc cron lúc 3h sáng (cho tin quá hạn hết hiệu lực, dọn ảnh,
+   sao lưu phiên Chủ nhật) chỉ chạy được những đêm máy còn thức. Kiểm tra:
+   `grep -l listings_expired logs/app.*.log`.
 
 ---
 
@@ -218,6 +227,30 @@ ngày đọc số thô nên tự khoá chính nó — nó chặn luôn đoạn m
 4. Backlog tồn lại sẽ chảy ra với tốc độ **một bài/nhịp** và tối đa `MAX_POSTS_PER_DAY` bài/ngày —
    đó là hành vi đúng, đừng nới nhịp cron để đẩy nhanh (xem cảnh báo về tần suất đăng trong
    CLAUDE.md). Tin quá `LISTING_MAX_AGE_DAYS` ngày sẽ tự chuyển sang `expired` và không đăng nữa.
+
+---
+
+## Sự cố 10 — Khách nhắn tin mà Telegram không báo
+
+Agent báo hai nguồn: tin Zalo 1-1 gửi tới tài khoản Zalo của agent (`zalo:dm-alert`) và hộp thư
+Messenger của tài khoản đăng bài, gồm cả mục "Tin nhắn đang chờ" của người lạ (`fb:inbox`, chạy theo
+`FB_INBOX_CHECK_CRON`, mặc định 15 phút một lần từ 6h tới 23h59).
+
+1. Dòng `Agent đang chạy` lúc khởi động có mục `Báo tin nhắn khách`. Nếu ghi `tắt` thì kiểm tra
+   `ZALO_DM_ALERT_ENABLED` / `FB_INBOX_CHECK_CRON` trong `.env`.
+2. Messenger: `grep '"fb:inbox"' logs/app.<ngày>.1.log | tail`. Mỗi lượt ghi một dòng
+   "Đã kiểm tra hộp thư Messenger" kèm số hội thoại. Không có dòng nào thì:
+   - Cầu dao Facebook đang ngắt (lượt kiểm tra cố ý bỏ qua để không tải thêm trang nào), hoặc
+   - Ngoài giờ trong `FB_INBOX_CHECK_CRON`.
+3. Telegram báo "N lần liên tiếp không đọc được hộp thư Messenger" nghĩa là giao diện Facebook đã đổi.
+   Bộ đọc lấy các thẻ `a[href*="/messages/"][href*="/t/"]` và tách `innerText`, xem
+   `src/facebook/inboxParser.ts` (có chuỗi mẫu thật trong comment và trong
+   `test/unit/inboxParser.test.ts`).
+4. Muốn nhận lại bản tổng hợp toàn bộ hộp thư (như lần chạy đầu) thì xoá collection
+   `fb_inbox_threads`: lượt kiểm tra kế tiếp sẽ coi như lần đầu.
+5. Nội dung tin Messenger hiện là "(mã hoá đầu cuối)": trình duyệt của agent không có mã PIN khôi phục
+   tin mã hoá, nên chỉ biết **ai** nhắn và **lúc nào**. Muốn đọc và trả lời thì đăng nhập tài khoản
+   đăng bài trên app Messenger của điện thoại.
 
 ---
 

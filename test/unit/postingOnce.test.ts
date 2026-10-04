@@ -18,7 +18,11 @@ vi.mock("../../src/db/collections.js", () => ({
     postJobs: () => ({ updateOne: vi.fn(), aggregate: () => ({ toArray: async () => [] }) }),
 }));
 vi.mock("../../src/db/indexes.js", () => ({ incrementDailyMetric: vi.fn() }));
-vi.mock("../../src/facebook/fbBrowser.js", () => ({ newPage: newPageMock, checkSession: checkSessionMock }));
+vi.mock("../../src/facebook/fbBrowser.js", () => ({
+    newPage: newPageMock,
+    checkSession: checkSessionMock,
+    withBrowserLock: <T>(task: () => Promise<T>) => task(),
+}));
 vi.mock("../../src/facebook/fbPoster.js", () => ({ CheckpointError: class extends Error {}, postToGroup: vi.fn() }));
 vi.mock("../../src/facebook/rateLimiter.js", () => ({
     checkPostingAllowed: checkPostingAllowedMock,
