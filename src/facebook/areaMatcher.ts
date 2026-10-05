@@ -30,7 +30,12 @@ export function normalizeArea(text: string): string {
  * thì một nhóm phủ đúng khu vực vẫn bị loại, và tin đăng không tìm được nhóm nào để đăng.
  */
 const DISTRICT_ALIASES: Record<string, string[]> = {
-    "cau giay": ["cau giay", "dich vong", "nghia tan", "yen hoa", "trung kinh", "quan hoa", "mai dich"],
+    "cau giay": [
+        "cau giay", "dich vong", "nghia tan", "yen hoa", "trung kinh", "quan hoa", "mai dich",
+        // Tên đường chỉ nằm trong Cầu Giấy — địa chỉ thật hay chỉ ghi "ngõ 180 Trần Duy Hưng".
+        "tran duy hung", "trung hoa", "nguyen khang", "duong quang ham", "tran thai tong", "xuan thuy",
+        "nguyen phong sac", "tran quoc vuong",
+    ],
     "nam tu liem": ["nam tu liem", "my dinh", "me tri", "phu do", "tu liem", "cau dien"],
     "bac tu liem": ["bac tu liem", "co nhue", "xuan dinh", "minh khai", "pham van dong"],
     "thanh xuan": ["thanh xuan", "nga tu so", "trieu khuc", "khuong dinh", "khuong trung", "kim giang", "chinh kinh", "nhan chinh"],
@@ -40,7 +45,10 @@ const DISTRICT_ALIASES: Record<string, string[]> = {
     "hai ba trung": ["hai ba trung", "bach khoa", "minh khai hbt", "vinh tuy", "truong dinh", "bach mai"],
     "ha dong": ["ha dong", "van quan", "mo lao", "yen nghia", "duong noi", "phu la", "quang trung hd"],
     "long bien": ["long bien", "viet hung", "sai dong", "bo de", "ngoc lam", "gia lam"],
-    "tay ho": ["tay ho", "xuan la", "nhat tan", "quang an", "buoi", "au co"],
+    "tay ho": [
+        "tay ho", "xuan la", "nhat tan", "quang an", "buoi", "au co",
+        "nguyen hoang ton", "thuy khue", "to ngoc van", "tu lien", "yen phu", "phu thuong", "xuan dieu",
+    ],
     "hoan kiem": ["hoan kiem", "hang bai", "cua nam", "phuc tan", "chuong duong"],
     "thanh tri": ["thanh tri", "ngu hiep", "tu hiep", "van dien"],
     "hoai duc": ["hoai duc", "an khanh", "van canh", "song phuong"],

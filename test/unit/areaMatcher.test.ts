@@ -44,6 +44,9 @@ describe("extractDistricts", () => {
         expect(extractDistricts("145 Chính Kinh")).toEqual(["thanh xuan"]);
         expect(extractDistricts("ngõ 217 Yên Hoà")).toEqual(["cau giay"]);
         expect(extractDistricts("Mỹ Đình")).toEqual(["nam tu liem"]);
+        // Hai địa chỉ thật bị kẹt ở "ready" ngày 2026-10-05 vì thiếu bí danh tên đường.
+        expect(extractDistricts("Số 4 ngõ 180 Trần Duy Hưng")).toEqual(["cau giay"]);
+        expect(extractDistricts("Mặt phố 783 Nguyễn Hoàng Tôn")).toEqual(["tay ho"]);
     });
 
     it("một chuỗi nhắc nhiều quận thì trả về đủ", () => {
