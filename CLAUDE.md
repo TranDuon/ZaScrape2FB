@@ -771,9 +771,10 @@ metered per group and an unused slot is **not** picked up by another group: the 
 most of its good rooms while the quiet one never spends its allocation. Measured over the logs, the
 three watched threads produced 35 / 11 / 8 listings — a 4× spread.
 
-**Current setup (2026-09-17): all three threads are watched again — Diamond Homes 3 at 10,
-Dat Tphomes and Pham Dinh Dat at 5 each, 20 listings/day** (Diamond Homes 3 alone at 10 from
-2026-08-27 and 15 from 2026-09-15). Turning a thread off belongs in `ZALO_ALLOWED_THREAD_IDS`, not in an
+**Current setup (2026-10-13): two threads — Diamond Homes 3 at 15, Pham Dinh Dat at 5,
+20 listings/day.** Dat Tphomes was removed on 2026-10-13 because the group stopped operating, and
+its 5 went to Diamond Homes 3 (before that, from 2026-09-17: 10 / 5 / 5 across all three; Diamond
+Homes 3 alone at 10 from 2026-08-27 and 15 from 2026-09-15). Turning a thread off belongs in `ZALO_ALLOWED_THREAD_IDS`, not in an
 override of `:0` — the allowlist drops the message in `isAllowed` before batching or parsing costs
 anything, whereas a `:0` cap still builds the batch and then logs one INFO line per discarded batch.
 All thread IDs are named in a `.env` comment so toggling one is a single edit.
@@ -788,7 +789,7 @@ and silently voided the safeguard.
 The chain is meant to be read as one thing — change one number and re-derive the others:
 
 ```
-Σ per-thread caps                          = listings in       (10+5+5 = 20)
+Σ per-thread caps                          = listings in       (15+5   = 20)
 MAX_POSTS_PER_DAY / MAX_GROUPS_PER_LISTING = listings composed (20/1   = 20)
 listings composed × MAX_GROUPS_PER_LISTING = posts out         (20 × 1 = 20)
 ```
